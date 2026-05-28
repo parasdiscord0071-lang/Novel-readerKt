@@ -51,6 +51,10 @@ Ensure you read this section before making any changes to WebView behaviors, lif
 - **Context**: The TTS polyfill replaces standard browser WebSpeech bindings. Reading position autosave (`remember_paragraphs`), auto-translation scraper, and next-chapter loading have overlapping timing cycles.
 - **Rule**: Keep state clean. Prior to starting new speech sequences or navigating, cancel previous translation scraping coroutines and flush active speaker channels (`QUEUE_FLUSH`) inside the Foreground service context to prevent multi-voice overlays or database state conflicts.
 
+### 5. Integrity of the JavaScript Bridge for Wtr-Lab (CRITICAL AD-BLOCKER DETECTION WARNING)
+- **Context**: The JavaScript bridge (`WtrWebAppInterface` and the window injection bindings) must **NEVER** be removed, bypassed, or globally disabled for wtr-lab.com or companion reader engines. Wtr-Lab employs an extremely sensitive, proprietary script-monitoring system that tracks background TTS playback and WebSpeech api signals.
+- **Rule**: Bypassing or deleting the bridge interactions causes the target website script tracking to fail, which triggers its automated security defenses, labeling the browser as having a hostile **ad-blocker** fully active. This will instantly halt webpage loading or lock the reader view. Always route speech play/pause/cancel events back through the bridge callbacks or let the background timer mechanism handle takeovers seamlessly.
+
 ---
 
 ## 📜 Complete Codebase Map

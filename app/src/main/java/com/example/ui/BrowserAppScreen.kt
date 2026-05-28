@@ -733,6 +733,15 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                                                     }
                                                 });
                                             }
+                                        } else if (host.includes("wtr-lab")) {
+                                            contentEl = document.querySelector('.read-content') || document.querySelector('#content') || document.querySelector('.wtr-reader-content') || document.querySelector('.chapter-content') || document.body;
+                                            if (contentEl) {
+                                                let pTags = contentEl.querySelectorAll('.wtr-line-segment, p');
+                                                pTags.forEach(p => {
+                                                    let text = p.innerText.trim();
+                                                    if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
+                                                });
+                                            }
                                         } else if (host.includes("timotxt")) {
                                             contentEl = document.querySelector('.read-content') || document.querySelector('#content') || document.querySelector('.show_txt');
                                             if (contentEl) {
@@ -974,6 +983,162 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                 currentRunExtractionAndPlay()
             } else {
                 WtrAudioControlBridge.setIsAudiobookModeActive(false)
+            }
+        }
+    }
+
+    // Pre-extract paragraphs of the current page for fallback background playback on standard webpage TTS speechSynthesis
+    LaunchedEffect(isWebLoading, activeTab?.url) {
+        if (!isWebLoading) {
+            val urlVal = activeTab?.url ?: ""
+            if (urlVal.isNotEmpty() && urlVal != "chrome://newtab") {
+                delay(1200) // Settle DOM delay
+                val webView = currentActiveWebView
+                if (webView != null) {
+                    webView.evaluateJavascript(
+                        """
+                        (function() {
+                            let paragraphs = [];
+                            let host = window.location.hostname;
+                            
+                            function isJunk(text) {
+                                let t = text.toLowerCase().trim();
+                                if (t.length < 5) return true;
+                                if (t.includes(".com") || t.includes(".org") || t.includes(".net") || t.includes(".me") || t.includes(".xyz") || t.includes("http://") || t.includes("https://")) {
+                                    if (t.includes("novelbin") || t.includes("novelhall") || t.includes("freewebnovel") || t.includes("fanmtl") || t.includes("timotxt") || t.includes("webnovel") || t.includes("wtr-lab")) {
+                                        return true;
+                                    }
+                                }
+                                const promoKeywords = [
+                                    "join our discord", "join discord", "patreon", "support me", "support the author",
+                                    "rate this", "please review", "please rate", "author's note", "author note",
+                                    "recommend", "translator", "translation", "editor's note", "editor note",
+                                    "find any errors", "broken links", "report us", "if you find any", "novelbin",
+                                    "novelhall", "freewebnovel", "fanmtl", "timotxt", "webnovel", "next chapter",
+                                    "previous chapter", "table of contents", "read online free", "read online for free",
+                                    "unlocked chapters", "bonus chapters", "sign up", "sign in", "subscribe to",
+                                    "follow my page", "download our app", "read this novel", "other novel", "like this book"
+                                ];
+                                if (t.length < 300) {
+                                    for (let keyword of promoKeywords) {
+                                        if (t.includes(keyword)) return true;
+                                    }
+                                }
+                                return false;
+                            }
+                            
+                            let contentEl = null;
+                            if (host.includes("webnovel")) {
+                                let containers = document.querySelectorAll('.cha-content, .chapter-content, .cha-words, .chapter-inner');
+                                contentEl = containers[0];
+                                if (contentEl) {
+                                    let pTags = contentEl.querySelectorAll('p, .cha-paragraph, .pirate');
+                                    pTags.forEach(p => {
+                                        let text = p.innerText.trim();
+                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
+                                    });
+                                }
+                            } else if (host.includes("novelhall")) {
+                                contentEl = document.querySelector('#htmlContent') || document.querySelector('.entry-content');
+                                if (contentEl) {
+                                    contentEl.querySelectorAll('p, .wtr-line-segment').forEach(p => {
+                                        let text = p.innerText.trim();
+                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
+                                    });
+                                }
+                            } else if (host.includes("fanmtl")) {
+                                contentEl = document.querySelector('.chapter-content') || document.querySelector('.read-content');
+                                if (contentEl) {
+                                    contentEl.querySelectorAll('p').forEach(p => {
+                                        let text = p.innerText.trim();
+                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
+                                    });
+                                }
+                            } else if (host.includes("novelbin")) {
+                                contentEl = document.querySelector('#chr-content');
+                                if (contentEl) {
+                                    contentEl.querySelectorAll('p').forEach(p => {
+                                        let text = p.innerText.trim();
+                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
+                                    });
+                                }
+                            } else if (host.includes("freewebnovel")) {
+                                contentEl = document.querySelector('.txt');
+                                if (contentEl) {
+                                    contentEl.querySelectorAll('p').forEach(p => {
+                                        let text = p.innerText.trim();
+                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
+                                    });
+                                }
+                            } else if (host.includes("timotxt") || host.includes("wtr-lab")) {
+                                contentEl = document.querySelector('.read-content') || document.querySelector('#content') || document.querySelector('.show_txt') || document.querySelector('.wtr-reader-content');
+                                if (contentEl) {
+                                    let pTags = contentEl.querySelectorAll('p, .wtr-line-segment');
+                                    pTags.forEach(p => {
+                                        let text = p.innerText.trim();
+                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
+                                    });
+                                }
+                            }
+                            
+                            if (paragraphs.length === 0) {
+                                let bestContainer = null;
+                                let maxPLength = 0;
+                                document.querySelectorAll('div, article, section').forEach(el => {
+                                    if (!el.closest('nav, footer, h1, fieldset, form, header, script, style, #comments, .comments, .nav, .footer, .sidebar, #sidebar')) {
+                                        let pList = el.querySelectorAll('p');
+                                        if (pList.length > maxPLength) {
+                                            maxPLength = pList.length;
+                                            bestContainer = el;
+                                        }
+                                    }
+                                });
+                                if (bestContainer && maxPLength > 3) {
+                                    bestContainer.querySelectorAll('p').forEach(p => {
+                                        let text = p.innerText.trim();
+                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
+                                    });
+                                } else {
+                                    let pTags = document.querySelectorAll('p, li, h1, h2, h3, [class*="paragraph"], [id*="paragraph"], .wtr-line-segment');
+                                    pTags.forEach(p => {
+                                        let t = p.innerText.trim();
+                                        let isChinese = /[\u4e00-\u9fa5]/.test(t);
+                                        let isValidLength = isChinese ? t.length > 5 : t.length > 15;
+                                        if (isValidLength && !p.closest('nav, footer, h1, fieldset, form, header, script, style, #comments, .comments, .nav, .footer, .sidebar, #sidebar, .menu, #menu')) {
+                                            if (!isJunk(t)) paragraphs.push(t);
+                                        }
+                                    });
+                                }
+                            }
+                            return JSON.stringify(paragraphs);
+                        })();
+                        """.trimIndent()
+                    ) { jsonResult ->
+                        if (jsonResult != null && jsonResult != "null" && jsonResult != "[]" && jsonResult.isNotEmpty()) {
+                            try {
+                                val cleanResult = if (jsonResult.startsWith("\"") && jsonResult.endsWith("\"")) {
+                                    org.json.JSONTokener(jsonResult).nextValue() as String
+                                } else {
+                                    jsonResult
+                                }
+                                val array = org.json.JSONArray(cleanResult)
+                                val list = mutableListOf<String>()
+                                for (i in 0 until array.length()) {
+                                    val text = array.getString(i).trim()
+                                    if (text.isNotEmpty()) {
+                                        list.add(text)
+                                    }
+                                }
+                                WtrAudioControlBridge.setWebSpeakNativeFallbackList(list)
+                                WtrAudioControlBridge.setWebSpeakNativeFallbackIndex(-1)
+
+                                com.example.WtrLogManager.log(context, "Bypassed Web JS background lag: Pre-cached ${list.size} paragraphs for background fallback TTS.")
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
+                }
             }
         }
     }

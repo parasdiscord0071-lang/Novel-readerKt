@@ -46,6 +46,28 @@ class WtrBrowserService : Service() {
     // Coroutine job to debounce state transitions during fast paragraph switching
     private var cancelJob: kotlinx.coroutines.Job? = null
 
+    // Background WebView speech timeout detection and native backup takeover loop
+    private val webviewSpeechTimeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var isBackupTakeoverActive = false
+    private val webviewSpeechTimeoutRunnable = object : Runnable {
+        override fun run() {
+            val fallbackList = WtrAudioControlBridge.webSpeakNativeFallbackList.value
+            val fallbackIdx = WtrAudioControlBridge.webSpeakNativeFallbackIndex.value
+            val nextFallbackIdx = fallbackIdx + 1
+            android.util.Log.d("WtrTts", "WebView speech timeout fired at fallback index $fallbackIdx. Starting native takeover for index $nextFallbackIdx...")
+            if (fallbackList.isNotEmpty() && nextFallbackIdx < fallbackList.size) {
+                isBackupTakeoverActive = true
+                WtrAudioControlBridge.setWebSpeakNativeFallbackIndex(nextFallbackIdx)
+                val nextText = fallbackList[nextFallbackIdx]
+                speakText(nextText, currentSpeechRate, currentSpeechPitch, currentSpeechLang)
+                WtrAudioControlBridge.onWebViewProgressTrigger?.invoke("start", 0)
+            } else {
+                isBackupTakeoverActive = false
+                WtrAudioControlBridge.onTtsDone?.invoke()
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -58,6 +80,20 @@ class WtrBrowserService : Service() {
 
         // Hook up bridge TTS speaking controls
         WtrAudioControlBridge.onSpeakNative = { text, rate, pitch, lang ->
+            webviewSpeechTimeoutHandler.removeCallbacks(webviewSpeechTimeoutRunnable)
+            isBackupTakeoverActive = false
+
+            val fallbackList = WtrAudioControlBridge.webSpeakNativeFallbackList.value
+            if (fallbackList.isNotEmpty()) {
+                val cleanText = text.trim()
+                var matchIdx = fallbackList.indexOf(cleanText)
+                if (matchIdx == -1) {
+                    matchIdx = fallbackList.indexOfFirst { it.lowercase().trim() == cleanText.lowercase() }
+                }
+                if (matchIdx != -1) {
+                    WtrAudioControlBridge.setWebSpeakNativeFallbackIndex(matchIdx)
+                }
+            }
             speakText(text, rate, pitch, lang)
         }
         WtrAudioControlBridge.onCancelNative = {
@@ -167,6 +203,18 @@ class WtrBrowserService : Service() {
                         }
                     }
                 } else {
+                    // We are playing via Wtr-Lab / web speechSynthesis website bridge where the WebView page drives the queue.
+                    // If we are already in background takeover mode, we want to immediately post the next chunk.
+                    // If we are in standard foreground/unthrottled mode, we reschedule/post the background timeout to run after 1500ms
+                    // in case the WebView's JS gets throttled/asleep in background mode or when the screen is turned off.
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        webviewSpeechTimeoutHandler.removeCallbacks(webviewSpeechTimeoutRunnable)
+                        if (isBackupTakeoverActive) {
+                            webviewSpeechTimeoutHandler.postDelayed(webviewSpeechTimeoutRunnable, 50L)
+                        } else {
+                            webviewSpeechTimeoutHandler.postDelayed(webviewSpeechTimeoutRunnable, 1500L)
+                        }
+                    }
                     WtrAudioControlBridge.onTtsDone?.invoke()
                 }
             }
@@ -255,6 +303,8 @@ class WtrBrowserService : Service() {
 
     private fun handleCancelNative() {
         cancelJob?.cancel()
+        webviewSpeechTimeoutHandler.removeCallbacks(webviewSpeechTimeoutRunnable)
+        isBackupTakeoverActive = false
         if (isTtsInitialized) {
             tts?.stop()
         }
@@ -263,12 +313,16 @@ class WtrBrowserService : Service() {
 
     private fun stopText() {
         cancelJob?.cancel()
+        webviewSpeechTimeoutHandler.removeCallbacks(webviewSpeechTimeoutRunnable)
+        isBackupTakeoverActive = false
         tts?.stop()
         WtrAudioControlBridge.updatePlaybackState(false, null, "Stopped")
     }
 
     private fun pauseText() {
         cancelJob?.cancel()
+        webviewSpeechTimeoutHandler.removeCallbacks(webviewSpeechTimeoutRunnable)
+        isBackupTakeoverActive = false
         tts?.stop()
         WtrAudioControlBridge.updatePlaybackState(false, null, "Paused")
         WtrAudioControlBridge.onWebViewProgressTrigger?.invoke("pause", lastWordIndex)

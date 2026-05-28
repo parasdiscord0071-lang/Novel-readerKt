@@ -95,6 +95,21 @@ object WtrAudioControlBridge {
     // Optional callback for custom trackplayer sentence completion
     var onTtsDone: (() -> Unit)? = null
 
+    // Secondary background TTS paragraph list to bypass background JS roundtrip throttling on Wtr-Lab / web speechSynthesis websites
+    private val _webSpeakNativeFallbackList = MutableStateFlow<List<String>>(emptyList())
+    val webSpeakNativeFallbackList: StateFlow<List<String>> = _webSpeakNativeFallbackList
+    
+    private val _webSpeakNativeFallbackIndex = MutableStateFlow(-1)
+    val webSpeakNativeFallbackIndex: StateFlow<Int> = _webSpeakNativeFallbackIndex
+
+    fun setWebSpeakNativeFallbackList(list: List<String>) {
+        _webSpeakNativeFallbackList.value = list
+    }
+
+    fun setWebSpeakNativeFallbackIndex(index: Int) {
+        _webSpeakNativeFallbackIndex.value = index
+    }
+
     // Background-safe state variables to bypass UI thread lag during TTS playback
     private val _playTrackInputList = MutableStateFlow<List<String>>(emptyList())
     val playTrackInputList: StateFlow<List<String>> = _playTrackInputList

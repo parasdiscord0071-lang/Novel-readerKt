@@ -11,11 +11,11 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.wtrlab.pkmqzs"
+    applicationId = "com.paras.novelreader"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 2
+    versionName = "v2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

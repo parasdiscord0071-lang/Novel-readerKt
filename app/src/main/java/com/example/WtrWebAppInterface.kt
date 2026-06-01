@@ -3,6 +3,7 @@ package com.example
 import android.webkit.JavascriptInterface
 
 class WtrWebAppInterface(
+    val tabId: Long,
     private val onPlaybackStateChanged: (isPlaying: Boolean, title: String, subtitle: String) -> Unit,
     private val onUrlSynced: (url: String, title: String) -> Unit = { _, _ -> }
 ) {
@@ -13,11 +14,17 @@ class WtrWebAppInterface(
 
     @JavascriptInterface
     fun postPlaybackState(isPlaying: Boolean, title: String, subtitle: String) {
+        if (isPlaying) {
+            WtrAudioControlBridge.setActiveTtsTabId(tabId)
+        }
         onPlaybackStateChanged(isPlaying, title, subtitle)
     }
 
     @JavascriptInterface
     fun syncPollState(isPlaying: Boolean, title: String, subtitle: String = "") {
+        if (isPlaying) {
+            WtrAudioControlBridge.setActiveTtsTabId(tabId)
+        }
         val sub = if (subtitle.isNotEmpty()) {
             subtitle
         } else {
@@ -28,6 +35,7 @@ class WtrWebAppInterface(
 
     @JavascriptInterface
     fun speakNative(text: String, rate: Float, pitch: Float, lang: String) {
+        WtrAudioControlBridge.setActiveTtsTabId(tabId)
         WtrAudioControlBridge.onSpeakNative?.invoke(text, rate, pitch, lang)
     }
 

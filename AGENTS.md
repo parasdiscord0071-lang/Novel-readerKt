@@ -55,14 +55,28 @@ Ensure you read this section before making any changes to WebView behaviors, lif
 - **Context**: The JavaScript bridge (`WtrWebAppInterface` and the window injection bindings) must **NEVER** be removed, bypassed, or globally disabled for wtr-lab.com or companion reader engines. Wtr-Lab employs an extremely sensitive, proprietary script-monitoring system that tracks background TTS playback and WebSpeech api signals.
 - **Rule**: Bypassing or deleting the bridge interactions causes the target website script tracking to fail, which triggers its automated security defenses, labeling the browser as having a hostile **ad-blocker** fully active. This will instantly halt webpage loading or lock the reader view. Always route speech play/pause/cancel events back through the bridge callbacks or let the background timer mechanism handle takeovers seamlessly.
 
+### 6. Tab-scoped TTS Isolation and Concurrent Playback
+- **Context**: Users expect to keep listening to TTS audio on tab A while switching to tab B to search or browse other chapters. 
+- **Rule**: Standard player controls are scoped to the active TTS tab ID (`WtrAudioControlBridge.activeTtsTabId`). Playback state resets or transitions must never occur upon tab switching unless the user explicitly starts a new TTS session on the newly opened tab, in which case the previous tab's TTS is cleared and the new tab takes ownership.
+
+### 7. Infinite Layout Chapters and Visual Scroll Alignment
+- **Context**: Sites like `webnovel.com` load chapters dynamically inside sequential visual containers when the reading user scrolls vertically. 
+- **Rule**: Scraper routines must extract paragraphs across multiple concurrent content containers, keeping track of elements in the DOM. To start reading naturally from the user's current reading point rather than always starting from paragraph 1, the script must calculate elements' positions in the viewport, selecting the paragraph closest to the top of the viewport (`rect.top - 100`). Additionally, junk filter arrays must explicitly purge any background-inserted ad-blocker detection warn texts.
+
+### 8. Robust Backup & Restore Synchronization
+- **Context**: Users backing up their data need to migrate their browser configurations, tabs, bookmarks, and histories onto fresh installs.
+- **Rule**: When serializing/deserializing backup blobs via JSON, always format nested fields safely. Database clearing instructions (`clearHistory`, `clearBookmarks`, `clearTabs`) MUST execute in sequence before inserting entries from the parsed JSON, and the ViewModel must successfully re-evaluate the currently active tab ID state (`_currentTab.value = restoredTab`) to prevent empty WebViews from initializing on startup or failing to load. Ensure all I/O streams are executed off the Main thread under `Dispatchers.IO`.
+
 ---
 
 ## 📜 Complete Codebase Map
 
+- `/.github/workflows/build-apk.yml`
+  - *CI/CD pipeline: automates building debug APKs upon pushing to GitHub `main` branch, generating SemVer patches, and compiling Github releases with APK binaries.*
 - `/app/src/main/java/com/example/MainActivity.kt`
   - *Main entry point, bootstrap, permission handlers, theme, and WebView pool listeners.*
 - `/app/src/main/java/com/example/BrowserViewModel.kt`
-  - *Core VM: tab operations, history logs, search inputs, query validation and redirection parsing.*
+  - *Core VM: tab operations, history logs, search inputs, query validation, and export/import JSON backup logic.*
 - `/app/src/main/java/com/example/WtrLogManager.kt`
   - *Thread-safe ring-buffer list logging operations, persisted via split serialization inside SharedPreferences.*
 - `/app/src/main/java/com/example/WtrWebAppInterface.kt`
@@ -71,8 +85,8 @@ Ensure you read this section before making any changes to WebView behaviors, lif
   - *Foreground service handling CPU locks, lockscreen notifications throttled at 1.5s gates, and TextToSpeech queues.*
 - `/app/src/main/java/com/example/ui/`
   -  `BrowserAppScreen.kt`: *The core parent container rendering search bar, bottom audio shelf, and nested WebViews.*
-  -  `SettingsDialog.kt`: *Settings panel for speech parameters, force-dark css, ad-blocker, cookies, and Session Logging toggle.*
+  -  `SettingsDialog.kt`: *Settings panel for speech parameters, force-dark css, ad-blocker, cookies, diagnostic options, and the interactive JSON Backup / Restore importer launcher.*
   -  `ChromeNewTabPage.kt`: *Default screen rendering shortcuts, recent history rows, and search inputs.*
   -  `TabsPanel.kt`: *Double-grid UI folders to manage standalone tabs or nested tab folders.*
 - `/app/src/main/java/com/example/data/`
-  -  *Room database configurations decoupling database tables (`BookmarkEntry`, `HistoryEntry`, `TabEntry`) with simple repository patterns.*
+  -  *Room database configurations decoupling database tables (`BookmarkEntry`, `HistoryEntry`, `TabEntry`) with simple repository patterns and clean table-wipe queries.*

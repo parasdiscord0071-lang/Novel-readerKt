@@ -334,6 +334,7 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                 }
 
                 addJavascriptInterface(WtrWebAppInterface(
+                    tabId = tab.id,
                     onPlaybackStateChanged = { isPlaying, title, subtitle ->
                         WtrAudioControlBridge.updatePlaybackState(isPlaying, title, subtitle)
                     },
@@ -544,11 +545,22 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
     }
 
     // Custom TrackPlayer States for regular/different websites collected from service layer bridge
-    val isAudiobookModeActive by WtrAudioControlBridge.isAudiobookModeActive.collectAsStateWithLifecycle()
-    val playTrackInputList by WtrAudioControlBridge.playTrackInputList.collectAsStateWithLifecycle()
-    val currentTrackIndex by WtrAudioControlBridge.currentTrackIndex.collectAsStateWithLifecycle()
-    val currentlySpeakingText by WtrAudioControlBridge.currentlySpeakingText.collectAsStateWithLifecycle()
-    val isPlayerRunning by WtrAudioControlBridge.isPlayerRunning.collectAsStateWithLifecycle()
+    val isAudiobookModeActiveRaw by WtrAudioControlBridge.isAudiobookModeActive.collectAsStateWithLifecycle()
+    val playTrackInputListRaw by WtrAudioControlBridge.playTrackInputList.collectAsStateWithLifecycle()
+    val currentTrackIndexRaw by WtrAudioControlBridge.currentTrackIndex.collectAsStateWithLifecycle()
+    val currentlySpeakingTextRaw by WtrAudioControlBridge.currentlySpeakingText.collectAsStateWithLifecycle()
+    val isPlayerRunningRaw by WtrAudioControlBridge.isPlayerRunning.collectAsStateWithLifecycle()
+
+    val activeTtsTabId by WtrAudioControlBridge.activeTtsTabId.collectAsStateWithLifecycle()
+    val isCurrentTabTtsActive = activeTab?.let { tab ->
+        tab.id == activeTtsTabId
+    } ?: false
+
+    val isAudiobookModeActive = if (isCurrentTabTtsActive) isAudiobookModeActiveRaw else false
+    val playTrackInputList = if (isCurrentTabTtsActive) playTrackInputListRaw else emptyList()
+    val currentTrackIndex = if (isCurrentTabTtsActive) currentTrackIndexRaw else 0
+    val currentlySpeakingText = if (isCurrentTabTtsActive) currentlySpeakingTextRaw else ""
+    val isPlayerRunning = if (isCurrentTabTtsActive) isPlayerRunningRaw else false
 
     var isExtracting by remember { mutableStateOf(false) }
 
@@ -580,6 +592,7 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
     }
 
     // Reduced TTS latency and adaptive HTML readers extraction methods
+    // Reduced TTS latency and adaptive HTML readers extraction methods
     val runHtmlTextExtractionAndPlay: () -> Unit = {
         val webView = currentActiveWebView
         if (webView != null && !isExtracting) {
@@ -591,6 +604,7 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                     var attempts = 0
                     val maxAttempts = 80 // Poll up to 12-15 seconds for translation to finalize
                     var list = emptyList<String>()
+                    var startIdx = 0
                     var extractionSuccess = false
                     
                     while (attempts < maxAttempts) {
@@ -599,199 +613,162 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                                 webView.evaluateJavascript(
                                     """
                                     (function() {
-                                        let paragraphs = [];
-                                        let host = window.location.hostname;
-                                        
-                                        function isJunk(text) {
-                                            let t = text.toLowerCase().trim();
-                                            if (t.length < 5) return true;
-                                            if (t.includes(".com") || t.includes(".org") || t.includes(".net") || t.includes(".me") || t.includes(".xyz")  || t.includes("http://") || t.includes("https://")) {
-                                                if (t.includes("novelbin") || t.includes("novelhall") || t.includes("freewebnovel") || t.includes("fanmtl") || t.includes("timotxt") || t.includes("webnovel")) {
-                                                    return true;
-                                                }
-                                            }
-                                            const promoKeywords = [
-                                                "join our discord", "join discord", "patreon", "support me", "support the author",
-                                                "rate this", "please review", "please rate", "author's note", "author note",
-                                                "recommend", "translator", "translation", "editor's note", "editor note",
-                                                "find any errors", "broken links", "report us", "if you find any", "novelbin",
-                                                "novelhall", "freewebnovel", "fanmtl", "timotxt", "webnovel", "next chapter",
-                                                "previous chapter", "table of contents", "read online free", "read online for free",
-                                                "unlocked chapters", "bonus chapters", "sign up", "sign in", "subscribe to",
-                                                "follow my page", "download our app", "read this novel", "other novel", "like this book"
-                                            ];
-                                            if (t.length < 300) {
-                                                for (let keyword of promoKeywords) {
-                                                    if (t.includes(keyword)) return true;
-                                                }
-                                            }
-                                            return false;
-                                        }
-                                        
-                                        // Helper to split <br> separated blocks into cleaner segmented spans
-                                        function prepareBrParagraphs(contentEl) {
-                                            if (!contentEl) return;
-                                            if (contentEl.querySelector('.wtr-line-segment') || contentEl.querySelector('.wtr-focus-highlight')) return;
-                                            let pTags = contentEl.querySelectorAll('p');
-                                            if (pTags.length > 5) return; // Already has structural paragraphs
+                                        try {
+                                            let paragraphs = [];
+                                            let elements = [];
+                                            let host = window.location.hostname;
                                             
-                                            let html = contentEl.innerHTML;
-                                            let parts = html.split(/<br\s*\/?>/i);
-                                            let newParts = parts.map(part => {
-                                                let trimmed = part.replace(/<[^>]+>/g, '').trim();
-                                                if (trimmed.length > 5) {
-                                                    if (!part.trim().startsWith('<span class="wtr-line-segment"')) {
-                                                        return '<span class="wtr-line-segment">' + part + '</span>';
+                                            function isJunk(text) {
+                                                let t = text.toLowerCase().trim();
+                                                if (t.length < 5) return true;
+                                                if (t.includes("ad-blocker") || t.includes("adblocker") || t.includes("ad block") || t.includes("adblock") || t.includes("please disable") || t.includes("stop your ad blocker") || t.includes("ad blocker detected")) return true;
+                                                if (t.includes(".com") || t.includes(".org") || t.includes(".net") || t.includes(".me") || t.includes(".xyz")  || t.includes("http://") || t.includes("https://")) {
+                                                    if (t.includes("novelbin") || t.includes("novelhall") || t.includes("freewebnovel") || t.includes("fanmtl") || t.includes("timotxt") || t.includes("webnovel")) {
+                                                        return true;
                                                     }
                                                 }
-                                                return part;
+                                                const promoKeywords = [
+                                                    "join our discord", "join discord", "patreon", "support me", "support the author",
+                                                    "rate this", "please review", "please rate", "author's note", "author note",
+                                                    "editor's note", "editor note",
+                                                    "find any errors", "broken links", "report us", "if you find any", "novelbin",
+                                                    "novelhall", "freewebnovel", "fanmtl", "timotxt", "webnovel", "next chapter",
+                                                    "previous chapter", "table of contents", "read online free", "read online for free",
+                                                    "unlocked chapters", "bonus chapters", "sign up", "sign in", "subscribe to",
+                                                    "follow my page", "download our app", "read this novel", "other novel", "like this book",
+                                                    "stop your ad blocker", "ad blocker detected"
+                                                ];
+                                                if (t.length < 300) {
+                                                    for (let keyword of promoKeywords) {
+                                                        if (t.includes(keyword)) return true;
+                                                    }
+                                                }
+                                                return false;
+                                            }
+                                            
+                                            function prepareBrParagraphs(contentEl) {
+                                                if (!contentEl) return;
+                                                if (contentEl.querySelector('.wtr-line-segment') || contentEl.querySelector('.wtr-focus-highlight')) return;
+                                                let pTags = contentEl.querySelectorAll('p');
+                                                if (pTags.length > 5) return; 
+                                                
+                                                let html = contentEl.innerHTML;
+                                                let parts = html.split(/<br\s*\/?>/i);
+                                                let newParts = parts.map(part => {
+                                                    let trimmed = part.replace(/<[^>]+>/g, '').trim();
+                                                    if (trimmed.length > 5) {
+                                                        if (!part.trim().startsWith('<span class="wtr-line-segment"')) {
+                                                            return '<span class="wtr-line-segment">' + part + '</span>';
+                                                        }
+                                                    }
+                                                    return part;
+                                                });
+                                                contentEl.innerHTML = newParts.join('<br>');
+                                            }
+
+                                            let containers = [];
+                                            if (host.includes("webnovel")) {
+                                                let rawContainers = Array.from(document.querySelectorAll('.cha-content, .chapter-content, .cha-words, .chapter-inner'));
+                                                containers = rawContainers.filter(c => !rawContainers.some(other => other !== c && other.contains(c)));
+                                            } else if (host.includes("novelhall")) {
+                                                let el = document.querySelector('#htmlContent') || document.querySelector('.entry-content') || document.querySelector('.active');
+                                                if (el) containers.push(el);
+                                            } else if (host.includes("fanmtl")) {
+                                                let el = document.querySelector('.chapter-content') || document.querySelector('.read-content') || document.querySelector('#chapter-content') || document.querySelector('.content-area');
+                                                if (el) containers.push(el);
+                                            } else if (host.includes("novelbin")) {
+                                                let el = document.querySelector('#chr-content') || document.querySelector('.chr-c') || document.querySelector('#chapter-content') || document.querySelector('.chapter-container');
+                                                if (el) containers.push(el);
+                                            } else if (host.includes("freewebnovel")) {
+                                                let el = document.querySelector('.txt') || document.querySelector('#htmlContent') || document.querySelector('.chapter-content');
+                                                if (el) containers.push(el);
+                                            } else if (host.includes("wtr-lab")) {
+                                                let el = document.querySelector('.read-content') || document.querySelector('#content') || document.querySelector('.wtr-reader-content') || document.querySelector('.chapter-content') || document.body;
+                                                if (el) containers.push(el);
+                                            } else if (host.includes("timotxt")) {
+                                                let el = document.querySelector('.read-content') || document.querySelector('#content') || document.querySelector('.show_txt');
+                                                if (el) containers.push(el);
+                                            }
+
+                                            if (containers.length > 0) {
+                                                containers.forEach(contentEl => {
+                                                    if (host.includes("novelhall") || host.includes("timotxt")) {
+                                                        prepareBrParagraphs(contentEl);
+                                                    }
+                                                    let pSelector = host.includes("webnovel") ? 'p, .cha-paragraph, .pirate' : 'p, .wtr-line-segment';
+                                                    let rawPTags = Array.from(contentEl.querySelectorAll(pSelector));
+                                                    let pTags = rawPTags.filter(p => !rawPTags.some(parent => parent !== p && parent.contains(p)));
+                                                    
+                                                    pTags.forEach(p => {
+                                                        let excludeClass = '.author-note, .gift-box, .recommend-box, .comment-area, .m-comment, .user-opinion, .review-item, .j_recommendation, .book-recommend, .cha-nav, .chapter-control, .nav, .nav-btn, .next_chap, .prev_chap, .next-page, .prev-page, .ads, .adsbygoogle, .btn-group, .custom-control, .category, .desc, .title-book, .chapter-nav';
+                                                        if (!p.closest(excludeClass)) {
+                                                            let text = p.innerText.trim();
+                                                            if (text.length > 5 && !isJunk(text)) {
+                                                                paragraphs.push(text);
+                                                                elements.push(p);
+                                                            }
+                                                        }
+                                                    });
+                                                });
+                                            }
+
+                                            if (paragraphs.length === 0) {
+                                                let bestContainer = null;
+                                                let maxPLength = 0;
+                                                document.querySelectorAll('div, article, section').forEach(el => {
+                                                    if (!el.closest('nav, footer, h1, fieldset, form, header, script, style, #comments, .comments, .nav, .footer, .sidebar, #sidebar')) {
+                                                        let pList = el.querySelectorAll('p');
+                                                        if (pList.length > maxPLength) {
+                                                            maxPLength = pList.length;
+                                                            bestContainer = el;
+                                                        }
+                                                    }
+                                                });
+
+                                                if (bestContainer && maxPLength > 3) {
+                                                    bestContainer.querySelectorAll('p').forEach(p => {
+                                                        let text = p.innerText.trim();
+                                                        if (text.length > 5 && !isJunk(text)) {
+                                                            paragraphs.push(text);
+                                                            elements.push(p);
+                                                        }
+                                                    });
+                                                } else {
+                                                    let pTags = document.querySelectorAll('p, li, h1, h2, h3, [class*="paragraph"], [id*="paragraph"]');
+                                                    pTags.forEach(p => {
+                                                        let t = p.innerText.trim();
+                                                        let isChinese = /[\u4e00-\u9fa5]/.test(t);
+                                                        let isValidLength = isChinese ? t.length > 5 : t.length > 15;
+                                                        if (isValidLength && !p.closest('nav, footer, h1, fieldset, form, header, script, style, #comments, .comments, .nav, .footer, .sidebar, #sidebar, .menu, #menu')) {
+                                                            if (!isJunk(t)) {
+                                                                paragraphs.push(t);
+                                                                elements.push(p);
+                                                            }
+                                                        }
+                                                    });
+                                                }
+                                            }
+
+                                            let bestIndex = 0;
+                                            let minDistance = Infinity;
+                                            for (let i = 0; i < elements.length; i++) {
+                                                let rect = elements[i].getBoundingClientRect();
+                                                let dist = Math.abs(rect.top - 100);
+                                                if (dist < minDistance) {
+                                                    minDistance = dist;
+                                                    bestIndex = i;
+                                                }
+                                            }
+
+                                            return JSON.stringify({
+                                                paragraphs: paragraphs,
+                                                startIndex: bestIndex
                                             });
-                                            contentEl.innerHTML = newParts.join('<br>');
-                                        }
-
-                                        let contentEl = null;
-                                        let elements = [];
-
-                                        if (host.includes("webnovel")) {
-                                            let containers = document.querySelectorAll('.cha-content, .chapter-content, .cha-words, .chapter-inner');
-                                            if (containers.length > 1) {
-                                                let url = window.location.href;
-                                                let match = url.match(/_(\d+)(?:\?|$)/) || url.match(/chapter-(\d+)/);
-                                                if (match) {
-                                                    let chId = match[1];
-                                                    for (let c of containers) {
-                                                        if (c.innerHTML.includes(chId) || (c.getAttribute('data-cid') && c.getAttribute('data-cid').includes(chId))) {
-                                                            contentEl = c;
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                                if (!contentEl) {
-                                                    let bestVisible = null;
-                                                    let maxVisibleHeight = 0;
-                                                    for (let c of containers) {
-                                                        let rect = c.getBoundingClientRect();
-                                                        let visibleHeight = Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0);
-                                                        if (visibleHeight > maxVisibleHeight) {
-                                                            maxVisibleHeight = visibleHeight;
-                                                            bestVisible = c;
-                                                        }
-                                                    }
-                                                    contentEl = bestVisible || containers[0];
-                                                }
-                                            } else {
-                                                contentEl = containers[0];
-                                            }
-                                            if (contentEl) {
-                                                let pTags = contentEl.querySelectorAll('p, .cha-paragraph, .pirate');
-                                                pTags.forEach(p => {
-                                                    if (!p.closest('.author-note, .gift-box, .recommend-box, .comment-area, .m-comment, .user-opinion, .review-item, .j_recommendation, .book-recommend, .cha-nav, .chapter-control')) {
-                                                        let text = p.innerText.trim();
-                                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
-                                                    }
-                                                });
-                                            }
-                                        } else if (host.includes("novelhall")) {
-                                            contentEl = document.querySelector('#htmlContent') || document.querySelector('.entry-content') || document.querySelector('.active');
-                                            if (contentEl) {
-                                                prepareBrParagraphs(contentEl);
-                                                let pTags = contentEl.querySelectorAll('p, .wtr-line-segment');
-                                                pTags.forEach(p => {
-                                                    if (!p.closest('.nav, .nav-btn, .next_chap, .prev_chap, .next-page, .prev-page')) {
-                                                        let text = p.innerText.trim();
-                                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
-                                                    }
-                                                });
-                                            }
-                                        } else if (host.includes("fanmtl")) {
-                                            contentEl = document.querySelector('.chapter-content') || document.querySelector('.read-content') || document.querySelector('#chapter-content') || document.querySelector('.content-area');
-                                            if (contentEl) {
-                                                contentEl.querySelectorAll('p').forEach(p => {
-                                                    if (!p.closest('.author-note, .next_chap, .prev_chap, .nav-links')) {
-                                                        let text = p.innerText.trim();
-                                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
-                                                    }
-                                                });
-                                            }
-                                        } else if (host.includes("novelbin")) {
-                                            contentEl = document.querySelector('#chr-content') || document.querySelector('.chr-c') || document.querySelector('#chapter-content') || document.querySelector('.chapter-container');
-                                            if (contentEl) {
-                                                contentEl.querySelectorAll('p').forEach(p => {
-                                                    if (!p.closest('#chr-nav, .chr-nav, .ads, .adsbygoogle, .btn-group, .custom-control, .category, .desc, .title-book')) {
-                                                        let text = p.innerText.trim();
-                                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
-                                                    }
-                                                });
-                                            }
-                                        } else if (host.includes("freewebnovel")) {
-                                            contentEl = document.querySelector('.txt') || document.querySelector('#htmlContent') || document.querySelector('.chapter-content');
-                                            if (contentEl) {
-                                                contentEl.querySelectorAll('p').forEach(p => {
-                                                    if (!p.closest('.ads, .adsbygoogle, .nav-links, .chapter-nav')) {
-                                                        let text = p.innerText.trim();
-                                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
-                                                    }
-                                                });
-                                            }
-                                        } else if (host.includes("wtr-lab")) {
-                                            contentEl = document.querySelector('.read-content') || document.querySelector('#content') || document.querySelector('.wtr-reader-content') || document.querySelector('.chapter-content') || document.body;
-                                            if (contentEl) {
-                                                let pTags = contentEl.querySelectorAll('.wtr-line-segment, p');
-                                                pTags.forEach(p => {
-                                                    let text = p.innerText.trim();
-                                                    if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
-                                                });
-                                            }
-                                        } else if (host.includes("timotxt")) {
-                                            contentEl = document.querySelector('.read-content') || document.querySelector('#content') || document.querySelector('.show_txt');
-                                            if (contentEl) {
-                                                prepareBrParagraphs(contentEl);
-                                                let pTags = contentEl.querySelectorAll('p, .wtr-line-segment');
-                                                pTags.forEach(p => {
-                                                    if (!p.closest('.nav, .ads, .menu, .chapter-nav')) {
-                                                        let text = p.innerText.trim();
-                                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
-                                                    }
-                                                });
-                                            }
-                                        }
-
-                                        if (paragraphs.length === 0) {
-                                            let bestContainer = null;
-                                            let maxPLength = 0;
-                                            document.querySelectorAll('div, article, section').forEach(el => {
-                                                if (!el.closest('nav, footer, h1, fieldset, form, header, script, style, #comments, .comments, .nav, .footer, .sidebar, #sidebar')) {
-                                                    let pList = el.querySelectorAll('p');
-                                                    if (pList.length > maxPLength) {
-                                                        maxPLength = pList.length;
-                                                        bestContainer = el;
-                                                    }
-                                                }
+                                        } catch (e) {
+                                            return JSON.stringify({
+                                                error: e.toString()
                                             });
-
-                                            if (bestContainer && maxPLength > 3) {
-                                                bestContainer.querySelectorAll('p').forEach(p => {
-                                                    let text = p.innerText.trim();
-                                                    if (text.length > 5 && !isJunk(text)) {
-                                                        paragraphs.push(text);
-                                                    }
-                                                });
-                                            } else {
-                                                let pTags = document.querySelectorAll('p, li, h1, h2, h3, [class*="paragraph"], [id*="paragraph"]');
-                                                pTags.forEach(p => {
-                                                    let t = p.innerText.trim();
-                                                    let isChinese = /[\u4e00-\u9fa5]/.test(t);
-                                                    let isValidLength = isChinese ? t.length > 5 : t.length > 15;
-                                                    if (isValidLength && !p.closest('nav, footer, h1, fieldset, form, header, script, style, #comments, .comments, .nav, .footer, .sidebar, #sidebar, .menu, #menu')) {
-                                                        if (!isJunk(t)) {
-                                                            paragraphs.push(t);
-                                                        }
-                                                    }
-                                                });
-                                            }
                                         }
-                                        
-                                        return JSON.stringify(paragraphs);
                                     })();
                                     """.trimIndent()
                                 ) { res ->
@@ -800,48 +777,67 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                             }
                         }
                         
-                        // Verify non-empty array returned
-                        if (resultString != null && resultString != "null" && resultString != "[]" && resultString.isNotEmpty()) {
+                        // Verify non-empty structure returned
+                        if (resultString != null && resultString != "null" && resultString != "{}" && resultString.isNotEmpty()) {
                             val cleanResult = try {
-                                org.json.JSONTokener(resultString).nextValue() as String
+                                if (resultString.startsWith("\"") && resultString.endsWith("\"")) {
+                                    org.json.JSONTokener(resultString).nextValue() as String
+                                } else {
+                                    resultString
+                                }
                             } catch (e: Exception) {
                                 resultString
                             }
-                            val unescaped = org.json.JSONArray(cleanResult)
-                            val temp = mutableListOf<String>()
-                            for (i in 0 until unescaped.length()) {
-                                val text = unescaped.getString(i).trim()
-                                if (text.isNotEmpty()) {
-                                    temp.add(text)
+
+                            try {
+                                val jsonObject = org.json.JSONObject(cleanResult)
+                                if (jsonObject.has("error")) {
+                                    val err = jsonObject.getString("error")
+                                    com.example.WtrLogManager.log(context, "JS Extraction Error on attempt $attempts: $err")
                                 }
-                            }
-                            
-                            val isProxyTranslation = currentUrlLower.contains("translate.goog") || currentUrlLower.contains("translate.google")
-                            fun isPageMostlyTranslatingOrChinese(paragraphs: List<String>): Boolean {
-                                if (paragraphs.isEmpty()) return false
-                                var chineseCount = 0
-                                var englishCount = 0
-                                val sample = paragraphs.take(5)
-                                for (p in sample) {
-                                    for (c in p) {
-                                        if (c in '\u4e00'..'\u9fa5') {
-                                            chineseCount++
-                                        } else if (c.isLetter() && c.code < 128) {
-                                            englishCount++
-                                        }
+                                val array = jsonObject.getJSONArray("paragraphs")
+                                val bestIndex = jsonObject.optInt("startIndex", 0)
+                                
+                                val temp = mutableListOf<String>()
+                                for (i in 0 until array.length()) {
+                                    val text = array.getString(i).trim()
+                                    if (text.isNotEmpty()) {
+                                        temp.add(text)
                                     }
                                 }
-                                return chineseCount > 0 && englishCount < chineseCount
-                            }
-                            val isChinesePresent = isPageMostlyTranslatingOrChinese(temp)
-                            
-                            if (isProxyTranslation && isChinesePresent && attempts < maxAttempts - 1) {
+                                
+                                val isProxyTranslation = currentUrlLower.contains("translate.goog") || currentUrlLower.contains("translate.google")
+                                fun isPageMostlyTranslatingOrChinese(paragraphs: List<String>): Boolean {
+                                    if (paragraphs.isEmpty()) return false
+                                    var chineseCount = 0
+                                    var englishCount = 0
+                                    val sample = paragraphs.take(5)
+                                    for (p in sample) {
+                                        for (c in p) {
+                                            if (c in '\u4e00'..'\u9fa5') {
+                                                chineseCount++
+                                            } else if (c.isLetter() && c.code < 128) {
+                                                englishCount++
+                                            }
+                                        }
+                                    }
+                                    return chineseCount > 0 && englishCount < chineseCount
+                                }
+                                val isChinesePresent = isPageMostlyTranslatingOrChinese(temp)
+                                
+                                if (isProxyTranslation && isChinesePresent && attempts < maxAttempts - 1) {
+                                    attempts++
+                                    delay(200) // Fast 200ms sleep wait
+                                } else {
+                                    list = temp
+                                    startIdx = bestIndex
+                                    extractionSuccess = true
+                                    break
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
                                 attempts++
-                                delay(200) // Fast 200ms sleep wait
-                            } else {
-                                list = temp
-                                extractionSuccess = true
-                                break
+                                delay(150)
                             }
                         } else {
                             attempts++
@@ -864,17 +860,24 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                         }
                         val cleanHost = webUri.replace("www.", "").replace("translate.goog", "").trim('.')
                         WtrAudioControlBridge.setActiveWebsite(cleanHost)
+
+                        // Stop previous tab's TTS session if any, then claim this tab ID
+                        val curTabId = activeTab?.id
+                        if (curTabId != null && curTabId != activeTtsTabId) {
+                            WtrAudioControlBridge.onCancelNative?.invoke()
+                        }
+                        WtrAudioControlBridge.setActiveTtsTabId(curTabId)
                         
                         WtrAudioControlBridge.setPlayTrackInputList(list)
                         extractedUrlOfActiveTracks = tabUrl
                         
                         val savedProgressVal = getSavedParagraphIndex(context, tabUrl)
-                        val startIdx = if (savedProgressVal in list.indices) savedProgressVal else 0
-                        WtrAudioControlBridge.setCurrentTrackIndex(startIdx)
+                        val startParagraph = if (savedProgressVal in list.indices) savedProgressVal else startIdx
+                        WtrAudioControlBridge.setCurrentTrackIndex(startParagraph)
                         
-                        android.widget.Toast.makeText(context, "Ready! Starting at Paragraph ${startIdx + 1}", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(context, "Ready! Starting at Paragraph ${startParagraph + 1}", android.widget.Toast.LENGTH_SHORT).show()
                         
-                        playCustomParagraph(startIdx)
+                        playCustomParagraph(startParagraph)
                     } else {
                         android.widget.Toast.makeText(context, "Ah, we couldn't segment paragraphs text here. Check settings.", android.widget.Toast.LENGTH_LONG).show()
                     }
@@ -896,15 +899,104 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                 webView.evaluateJavascript(
                     """
                     (function() {
-                        let nextBtn = document.querySelector('.btn-next, .next, .next-chapter, a[class*="next"], button[class*="next"]');
-                        if (nextBtn) {
-                            nextBtn.click();
+                        let host = window.location.hostname.toLowerCase();
+                        
+                        function isDangerousOrToggle(el) {
+                            if (!el) return true;
+                            let tag = el.tagName.toLowerCase();
+                            if (tag === 'input' && (el.type === 'checkbox' || el.type === 'radio')) return true;
+                            let id = (el.id || '').toLowerCase();
+                            let cl = (el.className || '').toLowerCase();
+                            let text = (el.innerText || el.textContent || '').toLowerCase();
+                            
+                            let badKeywords = ['auto-continue', 'autocontinue', 'toggle', 'switch', 'opt-in', 'checkbox', 'unlock', 'purchase', 'fastpass', 'coin', 'comment', 'review', 'opinion', 'share', 'like', 'vote'];
+                            for (let kw of badKeywords) {
+                                if (id.includes(kw) || cl.includes(kw) || text.includes(kw)) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }
+                        
+                        if (host.includes("webnovel.com")) {
+                            let bookMatch = window.location.href.match(/\/book\/(\d+)\/(\d+)/);
+                            if (bookMatch) {
+                                let bookId = bookMatch[1];
+                                let currentChapId = bookMatch[2];
+                                let anchors = Array.from(document.querySelectorAll('a'));
+                                
+                                let candidateLinks = anchors.filter(a => {
+                                    let href = a.getAttribute('href') || '';
+                                    return href.includes('/book/' + bookId + '/') && 
+                                           !href.includes(currentChapId) && 
+                                           !isDangerousOrToggle(a);
+                                });
+                                
+                                let nextLink = candidateLinks.find(a => {
+                                    let t = (a.innerText || '').toLowerCase();
+                                    let cl = (a.className || '').toLowerCase();
+                                    return t.includes('next') || cl.includes('next') || cl.includes('chap');
+                                });
+                                
+                                if (nextLink) {
+                                    let href = nextLink.getAttribute('href');
+                                    nextLink.click();
+                                    if (href) {
+                                        if (href.startsWith('/')) href = window.location.origin + href;
+                                        window.location.href = href;
+                                        return true;
+                                    }
+                                }
+                            }
+                            
+                            // Fallback for Webnovel: try clicking standard bottom elements but excluding toggles
+                            let nextElements = Array.from(document.querySelectorAll('.btn-next, .next, .next-chapter, .next_chap, a[class*="next"], button[class*="next"]'));
+                            let safeNext = nextElements.find(el => !isDangerousOrToggle(el));
+                            if (safeNext) {
+                                safeNext.click();
+                                if (safeNext.tagName.toLowerCase() === 'a') {
+                                    let href = safeNext.getAttribute('href');
+                                    if (href) {
+                                        if (href.startsWith('/')) href = window.location.origin + href;
+                                        window.location.href = href;
+                                    }
+                                }
+                                return true;
+                            }
+                            
+                            // Scroll down as dynamic backup trigger
+                            window.scrollTo(0, document.body.scrollHeight);
+                            return true;
+                        }
+                        
+                        // General case
+                        let nextElements = Array.from(document.querySelectorAll('.btn-next, .next, .next-chapter, .next_chap, a[class*="next"], button[class*="next"]'));
+                        let safeNext = nextElements.find(el => !isDangerousOrToggle(el));
+                        if (safeNext) {
+                            safeNext.click();
+                            if (safeNext.tagName.toLowerCase() === 'a') {
+                                let href = safeNext.getAttribute('href');
+                                if (href) {
+                                    if (href.startsWith('/')) href = window.location.origin + href;
+                                    window.location.href = href;
+                                }
+                            }
                             return true;
                         } else {
-                            let links = Array.from(document.querySelectorAll('a, button'));
-                            let target = links.find(l => l.innerText && (l.innerText.toLowerCase().includes('next') || l.innerText.toLowerCase().includes('next chapter')));
+                            let linksAndButtons = Array.from(document.querySelectorAll('a, button'));
+                            let target = linksAndButtons.find(l => {
+                                let txt = (l.innerText || l.textContent || '').toLowerCase();
+                                return (txt.includes('next') || txt.includes('next chapter')) && !isDangerousOrToggle(l);
+                            });
                             if (target) {
                                 target.click();
+                                if (target.tagName.toLowerCase() === 'a') {
+                                    let href = target.getAttribute('href');
+                                    if (href) {
+                                        if (href.startsWith('/')) href = window.location.origin + href;
+                                        window.location.href = href;
+                                    }
+                                }
                                 return true;
                             } else {
                                 let currentUrl = window.location.href;
@@ -933,10 +1025,15 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
 
     // Navigation and resets of active state segments on chapter changes
     var previousUrl by remember { mutableStateOf("") }
-    LaunchedEffect(activeTab?.url) {
+    LaunchedEffect(activeTab?.url, activeTab?.id) {
         val currentUrl = activeTab?.url ?: ""
+        val currentTabId = activeTab?.id
         
-        val urlChanged = currentUrl.isNotEmpty() && previousUrl.isNotEmpty() && !isSameBaseOrTranslatedUrl(previousUrl, currentUrl)
+        val isSameTab = currentTabId == previousTabId
+        val host1 = try { android.net.Uri.parse(previousUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
+        val host2 = try { android.net.Uri.parse(currentUrl).host?.replace("www.", "") ?: "" } catch (e: Exception) { "" }
+        val isSameHost = host1.isNotEmpty() && host2.isNotEmpty() && host1 == host2
+        val urlChanged = isSameTab && currentUrl.isNotEmpty() && previousUrl.isNotEmpty() && !isSameBaseOrTranslatedUrl(previousUrl, currentUrl) && !isSameHost
         
         if (urlChanged) {
             if (isAudiobookModeActive) {
@@ -954,6 +1051,7 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
             }
         }
         previousUrl = currentUrl
+        previousTabId = currentTabId
     }
 
     // Autosave TTS reading paragraph index when progress changes
@@ -1208,45 +1306,21 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                     let elements = [];
                     
                     if (host.includes("webnovel")) {
-                        let contentEl = null;
-                        let containers = document.querySelectorAll('.cha-content, .chapter-content, .cha-words, .chapter-inner');
-                        if (containers.length > 1) {
-                            let url = window.location.href;
-                            let match = url.match(/_(\d+)(?:\?|$)/) || url.match(/chapter-(\d+)/);
-                            if (match) {
-                                let chId = match[1];
-                                for (let c of containers) {
-                                    if (c.innerHTML.includes(chId) || (c.getAttribute('data-cid') && c.getAttribute('data-cid').includes(chId))) {
-                                        contentEl = c;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (!contentEl) {
-                                let bestVisible = null;
-                                let maxVisibleHeight = 0;
-                                for (let c of containers) {
-                                    let rect = c.getBoundingClientRect();
-                                    let visibleHeight = Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0);
-                                    if (visibleHeight > maxVisibleHeight) {
-                                        maxVisibleHeight = visibleHeight;
-                                        bestVisible = c;
-                                    }
-                                }
-                                contentEl = bestVisible || containers[0];
-                            }
-                        } else {
-                            contentEl = containers[0];
-                        }
-                        if (contentEl) {
-                            let pTags = contentEl.querySelectorAll('p, .cha-paragraph, .pirate');
+                        let rawContainers = Array.from(document.querySelectorAll('.cha-content, .chapter-content, .cha-words, .chapter-inner'));
+                        let containers = rawContainers.filter(c => !rawContainers.some(other => other !== c && other.contains(c)));
+                        containers.forEach(contentEl => {
+                            let pSelector = 'p, .cha-paragraph, .pirate';
+                            let rawPTags = Array.from(contentEl.querySelectorAll(pSelector));
+                            let pTags = rawPTags.filter(p => !rawPTags.some(parent => parent !== p && parent.contains(p)));
                             pTags.forEach(p => {
                                 if (!p.closest('.author-note, .gift-box, .recommend-box, .comment-area, .m-comment, .user-opinion, .review-item, .j_recommendation, .book-recommend, .cha-nav, .chapter-control')) {
                                     let text = p.innerText.trim();
-                                    if (text.length > 5 && !isJunk(text)) elements.push(p);
+                                    if (text.length > 5 && !isJunk(text)) {
+                                        elements.push(p);
+                                    }
                                 }
                             });
-                        }
+                        });
                     } else if (host.includes("novelhall")) {
                         let contentEl = document.querySelector('#htmlContent') || document.querySelector('.entry-content') || document.querySelector('.active');
                         if (contentEl) {
@@ -2509,35 +2583,113 @@ private fun extractNovelAndChapter(title: String, url: String): Pair<String, Str
         .replace(" - timotxt", "", ignoreCase = true)
         .replace(" online free", "", ignoreCase = true)
         .replace(" read online", "", ignoreCase = true)
+        .replace("_timotxt", "", ignoreCase = true)
+        .replace("_timotxt.com", "", ignoreCase = true)
+        .replace("_novelhall.com", "", ignoreCase = true)
+        .replace(" - timotxt.com", "", ignoreCase = true)
+        .replace(" - novelhall.com", "", ignoreCase = true)
         .trim()
+        
+    if (cleanTitle.startsWith("《") && cleanTitle.endsWith("》")) {
+        cleanTitle = cleanTitle.substring(1, cleanTitle.length - 1).trim()
+    }
+
+    val chapterPatterns = listOf(
+        Regex("""(?i)\b(?:chapter|chap|ch|episode|ep)\.?\s*(\d+)"""), // Chapter 123 / Ch. 123
+        Regex("""(?i)\b(?:chapter|chap|ch|episode|ep)\.?\s*([ivxldcm]+)"""), // Roman
+        Regex("""(第\s*[0-9一二三四五六七八九十百千]+[章回节集卷])"""), // Chinese: 第123章 / 第一百章
+        Regex("""\b(\d+)\s*$""") // Digits at the very end of the title
+    )
+
+    var extractedChapter = ""
+    var extractedNovel = ""
 
     val separators = listOf(" - ", " | ", " – ", " — ")
     for (sep in separators) {
         if (cleanTitle.contains(sep)) {
             val parts = cleanTitle.split(sep)
             if (parts.size >= 2) {
-                val hasChap0 = parts[0].contains("Chapter", ignoreCase = true) || parts[0].contains("Ch ", ignoreCase = true) || parts[0].any { it.isDigit() }
-                val hasChap1 = parts[1].contains("Chapter", ignoreCase = true) || parts[1].contains("Ch ", ignoreCase = true) || parts[1].any { it.isDigit() }
+                val part0 = parts[0].trim()
+                val part1 = parts.drop(1).joinToString(" - ").trim()
                 
-                return if (hasChap1 && !hasChap0) {
-                    Pair(parts[0].trim(), parts[1].trim())
-                } else if (hasChap0 && !hasChap1) {
-                    Pair(parts[1].trim(), parts[0].trim())
+                var isPart1Chapter = false
+                for (pattern in chapterPatterns) {
+                    if (pattern.containsMatchIn(part1)) {
+                        isPart1Chapter = true
+                        break
+                    }
+                }
+                
+                var isPart0Chapter = false
+                for (pattern in chapterPatterns) {
+                    if (pattern.containsMatchIn(part0)) {
+                        isPart0Chapter = true
+                        break
+                    }
+                }
+
+                if (isPart1Chapter && !isPart0Chapter) {
+                    return Pair(part0, part1)
+                } else if (isPart0Chapter && !isPart1Chapter) {
+                    return Pair(part1, part0)
                 } else {
-                    Pair(parts[0].trim(), parts.drop(1).joinToString(" - ").trim())
+                    return Pair(part0, part1)
                 }
             }
         }
     }
-    
-    if (cleanTitle.contains("Chapter", ignoreCase = true)) {
-        val idx = cleanTitle.indexOf("Chapter", ignoreCase = true)
-        if (idx > 0) {
-            return Pair(cleanTitle.substring(0, idx).trim(), cleanTitle.substring(idx).trim())
+
+    for (pattern in chapterPatterns) {
+        val match = pattern.find(cleanTitle)
+        if (match != null) {
+            val fullMatch = match.value
+            val idx = cleanTitle.indexOf(fullMatch)
+            if (idx > 0) {
+                extractedNovel = cleanTitle.substring(0, idx).trim(' ', ',', '-', '_', '(', ')', '《', '》', ':').trim()
+                extractedChapter = cleanTitle.substring(idx).trim()
+                break
+            } else if (idx == 0) {
+                extractedChapter = fullMatch
+                extractedNovel = cleanTitle.substring(fullMatch.length).trim(' ', ',', '-', '_', ':', '(', ')').trim()
+                break
+            }
         }
     }
+
+    if (extractedChapter.isEmpty()) {
+        val urlPatterns = listOf(
+            Regex("""(?i)chapter[-_]?(\d+)"""),
+            Regex("""(?i)ch[-_]?(\d+)"""),
+            Regex("""/(\d+)\.html"""),
+            Regex("""/(\d+)""")
+        )
+        for (pattern in urlPatterns) {
+            val match = pattern.find(url)
+            if (match != null) {
+                val num = match.groupValues.getOrNull(1) ?: match.value
+                extractedChapter = "Chapter $num"
+                break
+            }
+        }
+    }
+
+    if (extractedNovel.isEmpty()) {
+        extractedNovel = cleanTitle
+    }
     
-    return Pair(cleanTitle, "Web Novel")
+    if (extractedChapter.isEmpty()) {
+        extractedChapter = "Chapter 1"
+    }
+
+    if (extractedNovel.startsWith("《") && extractedNovel.endsWith("》")) {
+        extractedNovel = extractedNovel.substring(1, extractedNovel.length - 1).trim()
+    }
+    
+    if (extractedNovel.isEmpty()) {
+        extractedNovel = "Web Novel"
+    }
+
+    return Pair(extractedNovel, extractedChapter)
 }
 
 private fun getCleanDisplayUrl(url: String): String {

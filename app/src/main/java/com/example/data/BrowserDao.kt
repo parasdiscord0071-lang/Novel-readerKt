@@ -43,6 +43,9 @@ interface BrowserDao {
     @Query("DELETE FROM bookmarks WHERE url = :url")
     suspend fun deleteBookmarkByUrl(url: String)
 
+    @Query("DELETE FROM bookmarks")
+    suspend fun clearBookmarks()
+
     @Query("SELECT EXISTS(SELECT 1 FROM bookmarks WHERE url = :url LIMIT 1)")
     fun isBookmarked(url: String): Flow<Boolean>
 

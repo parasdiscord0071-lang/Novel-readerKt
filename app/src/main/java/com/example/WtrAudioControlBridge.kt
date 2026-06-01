@@ -102,6 +102,13 @@ object WtrAudioControlBridge {
     private val _webSpeakNativeFallbackIndex = MutableStateFlow(-1)
     val webSpeakNativeFallbackIndex: StateFlow<Int> = _webSpeakNativeFallbackIndex
 
+    private val _activeTtsTabId = MutableStateFlow<Long?>(null)
+    val activeTtsTabId: StateFlow<Long?> = _activeTtsTabId
+
+    fun setActiveTtsTabId(id: Long?) {
+        _activeTtsTabId.value = id
+    }
+
     fun setWebSpeakNativeFallbackList(list: List<String>) {
         _webSpeakNativeFallbackList.value = list
     }

@@ -60,7 +60,6 @@ class WtrBrowserService : Service() {
                 WtrAudioControlBridge.setWebSpeakNativeFallbackIndex(nextFallbackIdx)
                 val nextText = fallbackList[nextFallbackIdx]
                 speakText(nextText, currentSpeechRate, currentSpeechPitch, currentSpeechLang)
-                WtrAudioControlBridge.onWebViewProgressTrigger?.invoke("start", 0)
             } else {
                 isBackupTakeoverActive = false
                 WtrAudioControlBridge.onTtsDone?.invoke()
@@ -72,6 +71,7 @@ class WtrBrowserService : Service() {
         super.onCreate()
         createNotificationChannel()
         setupMediaSession()
+        updateNotification()
 
         // Hook up the bridge to update notifications on playback changes
         WtrAudioControlBridge.onStateChangedCallback = {
@@ -175,12 +175,16 @@ class WtrBrowserService : Service() {
         tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {
                 WtrAudioControlBridge.updatePlaybackState(isPlaying = true)
-                WtrAudioControlBridge.onWebViewProgressTrigger?.invoke("start", 0)
+                if (!isBackupTakeoverActive) {
+                    WtrAudioControlBridge.onWebViewProgressTrigger?.invoke("start", 0)
+                }
             }
 
             override fun onDone(utteranceId: String?) {
                 // Keep playing state active since we transition seamlessly to next paragraph
-                WtrAudioControlBridge.onWebViewProgressTrigger?.invoke("end", 0)
+                if (!isBackupTakeoverActive) {
+                    WtrAudioControlBridge.onWebViewProgressTrigger?.invoke("end", 0)
+                }
                 
                 val list = WtrAudioControlBridge.playTrackInputList.value
                 val currentIndex = WtrAudioControlBridge.currentTrackIndex.value
@@ -221,17 +225,23 @@ class WtrBrowserService : Service() {
 
             @Deprecated("Deprecated in Java")
             override fun onError(utteranceId: String?) {
-                WtrAudioControlBridge.onWebViewProgressTrigger?.invoke("error", 0)
+                if (!isBackupTakeoverActive) {
+                    WtrAudioControlBridge.onWebViewProgressTrigger?.invoke("error", 0)
+                }
             }
 
             override fun onError(utteranceId: String?, errorCode: Int) {
-                WtrAudioControlBridge.onWebViewProgressTrigger?.invoke("error", 0)
+                if (!isBackupTakeoverActive) {
+                    WtrAudioControlBridge.onWebViewProgressTrigger?.invoke("error", 0)
+                }
             }
 
             override fun onRangeStart(utteranceId: String?, start: Int, end: Int, frame: Int) {
                 super.onRangeStart(utteranceId, start, end, frame)
                 lastWordIndex = start
-                WtrAudioControlBridge.onWebViewProgressTrigger?.invoke("boundary", start)
+                if (!isBackupTakeoverActive) {
+                    WtrAudioControlBridge.onWebViewProgressTrigger?.invoke("boundary", start)
+                }
             }
         })
     }
@@ -531,15 +541,6 @@ class WtrBrowserService : Service() {
         val title = WtrAudioControlBridge.title.value
         val subtitle = WtrAudioControlBridge.subtitle.value
 
-        // Manage WakeLock & WifiLock based on playing state
-        if (isPlaying) {
-            acquireWakeLock()
-            acquireWifiLock()
-        } else {
-            releaseWakeLock()
-            releaseWifiLock()
-        }
-
         // Update MediaSession state instantly (lightweight, not rate-limited by system UI)
         val stateBuilder = PlaybackState.Builder()
             .setActions(
@@ -688,14 +689,29 @@ class WtrBrowserService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+
+        // Manage WakeLock & WifiLock based on playing state (called after startForeground for correct AppOps association)
+        if (isPlaying) {
+            acquireWakeLock()
+            acquireWifiLock()
+        } else {
+            releaseWakeLock()
+            releaseWifiLock()
+        }
     }
 
     private fun acquireWakeLock() {
         synchronized(this) {
             if (wakeLock == null) {
-                val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-                wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "WtrLab::PlaybackWakeLock")
-                wakeLock?.acquire()
+                try {
+                    val powerManager = applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+                    wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "WtrLab::PlaybackWakeLock").apply {
+                        setReferenceCounted(false)
+                    }
+                    wakeLock?.acquire()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         }
     }
@@ -703,7 +719,11 @@ class WtrBrowserService : Service() {
     private fun releaseWakeLock() {
         synchronized(this) {
             if (wakeLock?.isHeld == true) {
-                wakeLock?.release()
+                try {
+                    wakeLock?.release()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
             wakeLock = null
         }

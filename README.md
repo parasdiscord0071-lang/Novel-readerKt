@@ -73,6 +73,8 @@ By establishing a bidirectional JavaScript-to-Native synchronization bridge, Nov
 * **Back-to-Front Paragraph Extraction**: Scans layout elements to systematically compile clean paragraph lists (`<p>`), filtering out irrelevant UI noise, ads, footers, related chapter lists, and social widgets before sending.
 * **Synchronized Paragraph Scrolling**: Automatically calculates DOM element vertical offsets as native speech loops progress, commanding the WebKit viewport to glide smoothly and center each active sentence.
 * **Word Boundary Highlights**: Employs TTS token boundaries to wrap the reading node inside a custom highlighting style sheet, giving the reader immediate visual focus.
+* **Visual Scroll-Position Reading Alignment**: Aligns speaking start index with the text segment the user is actively viewing on screen, by analyzing element scroll metrics within the active viewport.
+* **Infinite Scroll Multi-Container Synthesis**: Adapts to scrolling chapters by extracting and indexing text blocks across multiple sequential containers dynamically.
 
 ### 3. Background Audio Service & Lockscreen MediaSession
 * **Persistent Foreground Lifespan**: Wraps playback inside `WtrBrowserService`. Users can power off their screens, answer messages, or use external system apps without speech termination.
@@ -92,11 +94,17 @@ By establishing a bidirectional JavaScript-to-Native synchronization bridge, Nov
 * **Grid and Nesting Support**: Manage countless open folders. Supports standalone tabs or custom stacked **Tab Groups / Folders** for organizing various light-novel catalogs.
 * **Desktop Rendering Toggle**: Allows user-agents to simulate flat-desktop viewports on specific tabs to retrieve mobile-blocked novel chapters.
 * **Local Room Database State Saving**: Tab states, ordering indices, open folder groupings, history logs, and chapter bookmarks are immediately saved into Room structures, preserving open pages even during system reboots.
+* **Tab-Scoped Audio Sessions & Thread Isolation**: Native Text-To-Speech queues are tracked and bound strictly to their originating Tab ID. Switching tabs no longer halts background reading, allowing users to browse concurrent articles, run searches, or open parallel index groups without overlapping audio channels. Previous playback is safely released only when a new TTS sequence is explicitly started.
 
 ### 7. Integrated Diagnostics, Session Log Recorder & Safe Navigation Pools
 * **System Diagnostic Logs (`WtrLogManager`)**: An in-app diagnostic recorder captures critical web views lifecycle events (such as page starts, loaded status, synced JS bridges, and translation triggers). Operates in a thread-safe ring-buffer capping memory at the last 100 historical logs, with native options to view/clear logs dynamically via the main `DropdownMenu` ("View Diagnostic Logs") and a dedicated on/off toggle in Settings to protect user privacy.
 * **Hijacking Prevention Shield**: Prevents background or inactive tabs from hijacking active navigation hooks. Injected JavaScript page synchronization bridges are strictly restricted, validating tab associations only if `currentActiveTab?.id == tab.id`, preventing unwanted redirects, URL freezing, or random blank pages.
 * **Adaptive User-Agent Strings**: Handheld user-agent overrides utilize standard Android identifiers preventing modern servers from mistaking the internal WebKit as an unidentifiable automated robot client (eliminating infinite Cloudflare challenge loops).
+
+### 8. Full State Backup & Restore (JSON Exporter)
+* **Single-File Portability**: Users can export their complete browser configuration (SharedPreferences settings, all histories, all bookmarks, and open tabs with desktop-mode states) into a highly condensed JSON file.
+* **Storage Access Framework (SAF)**: Utilizes native `ActivityResultContracts.CreateDocument` and `OpenDocument` to provide a secure dialog where users can select download Folders or upload backups.
+* **Transactional Restores**: Database states are safely cleared and updated sequentially under `Dispatchers.IO`. Restored tabs and settings are immediately re-loaded into memory, auto-refreshing the screen back into the previous reading state upon upload.
 
 ---
 
@@ -267,7 +275,7 @@ Scroll WebView viewport into position    Load text segment / trigger speak loop
 
 ## 🛠️ Build Requirements & Setup Manual
 
-To build and compile this application locally, you must satisfy standard Android SDK requirements.
+To build and compile this application locally or via continuous integration, follow these instructions:
 
 ### System Prerequisites
 * **Android Studio**: Koala (2024.1.1) or higher.
@@ -276,6 +284,16 @@ To build and compile this application locally, you must satisfy standard Android
 * **Kotlin Version**: Required version `1.9.0`+.
 * **Min Native SDK**: Level API 26 (Android 8.0, matching modern background limits).
 * **Compile / Target SDK**: Level API 34 (Android 14, requiring explicit media type configurations).
+
+### 🤖 CI/CD GitHub Release Pipeline
+We have configured a fully automated continuous integration workflow inside `.github/workflows/build-apk.yml`.
+* **Execution Trigger**: Upon pushing code changes to the `main` branch, the pipeline executes.
+* **Flow Stages**:
+  1. Clones the full repository and sets up JDK 17 with caching capabilities enabled.
+  2. Creates a clean temporary Android debug keystore on the runner workspace.
+  3. Formulates a release candidate APK via the `gradle assembleDebug --no-daemon` compile task.
+  4. Automatically determines a new SemVer release tag (patch version incremental bump).
+  5. Uploads the final `.apk` file into the GitHub Releases tab and generates markdown release logs.
 
 ---
 

@@ -35,35 +35,113 @@ class BrowserRepository(private val browserDao: BrowserDao) {
             .replace(" - timotxt", "", ignoreCase = true)
             .replace(" online free", "", ignoreCase = true)
             .replace(" read online", "", ignoreCase = true)
+            .replace("_timotxt", "", ignoreCase = true)
+            .replace("_timotxt.com", "", ignoreCase = true)
+            .replace("_novelhall.com", "", ignoreCase = true)
+            .replace(" - timotxt.com", "", ignoreCase = true)
+            .replace(" - novelhall.com", "", ignoreCase = true)
             .trim()
+            
+        if (cleanTitle.startsWith("《") && cleanTitle.endsWith("》")) {
+            cleanTitle = cleanTitle.substring(1, cleanTitle.length - 1).trim()
+        }
+
+        val chapterPatterns = listOf(
+            Regex("""(?i)\b(?:chapter|chap|ch|episode|ep)\.?\s*(\d+)"""), // Chapter 123 / Ch. 123
+            Regex("""(?i)\b(?:chapter|chap|ch|episode|ep)\.?\s*([ivxldcm]+)"""), // Roman
+            Regex("""(第\s*[0-9一二三四五六七八九十百千]+[章回节集卷])"""), // Chinese: 第123章 / 第一百章
+            Regex("""\b(\d+)\s*$""") // Digits at the very end of the title
+        )
+
+        var extractedChapter = ""
+        var extractedNovel = ""
 
         val separators = listOf(" - ", " | ", " – ", " — ")
         for (sep in separators) {
             if (cleanTitle.contains(sep)) {
                 val parts = cleanTitle.split(sep)
                 if (parts.size >= 2) {
-                    val hasChap0 = parts[0].contains("Chapter", ignoreCase = true) || parts[0].contains("Ch ", ignoreCase = true) || parts[0].any { it.isDigit() }
-                    val hasChap1 = parts[1].contains("Chapter", ignoreCase = true) || parts[1].contains("Ch ", ignoreCase = true) || parts[1].any { it.isDigit() }
+                    val part0 = parts[0].trim()
+                    val part1 = parts.drop(1).joinToString(" - ").trim()
                     
-                    return if (hasChap1 && !hasChap0) {
-                        Pair(parts[0].trim(), parts[1].trim())
-                    } else if (hasChap0 && !hasChap1) {
-                        Pair(parts[1].trim(), parts[0].trim())
+                    var isPart1Chapter = false
+                    for (pattern in chapterPatterns) {
+                        if (pattern.containsMatchIn(part1)) {
+                            isPart1Chapter = true
+                            break
+                        }
+                    }
+                    
+                    var isPart0Chapter = false
+                    for (pattern in chapterPatterns) {
+                        if (pattern.containsMatchIn(part0)) {
+                            isPart0Chapter = true
+                            break
+                        }
+                    }
+
+                    if (isPart1Chapter && !isPart0Chapter) {
+                        return Pair(part0, part1)
+                    } else if (isPart0Chapter && !isPart1Chapter) {
+                        return Pair(part1, part0)
                     } else {
-                        Pair(parts[0].trim(), parts.drop(1).joinToString(" - ").trim())
+                        return Pair(part0, part1)
                     }
                 }
             }
         }
-        
-        if (cleanTitle.contains("Chapter", ignoreCase = true)) {
-            val idx = cleanTitle.indexOf("Chapter", ignoreCase = true)
-            if (idx > 0) {
-                return Pair(cleanTitle.substring(0, idx).trim(), cleanTitle.substring(idx).trim())
+
+        for (pattern in chapterPatterns) {
+            val match = pattern.find(cleanTitle)
+            if (match != null) {
+                val fullMatch = match.value
+                val idx = cleanTitle.indexOf(fullMatch)
+                if (idx > 0) {
+                    extractedNovel = cleanTitle.substring(0, idx).trim(' ', ',', '-', '_', '(', ')', '《', '》', ':').trim()
+                    extractedChapter = cleanTitle.substring(idx).trim()
+                    break
+                } else if (idx == 0) {
+                    extractedChapter = fullMatch
+                    extractedNovel = cleanTitle.substring(fullMatch.length).trim(' ', ',', '-', '_', ':', '(', ')').trim()
+                    break
+                }
             }
         }
+
+        if (extractedChapter.isEmpty()) {
+            val urlPatterns = listOf(
+                Regex("""(?i)chapter[-_]?(\d+)"""),
+                Regex("""(?i)ch[-_]?(\d+)"""),
+                Regex("""/(\d+)\.html"""),
+                Regex("""/(\d+)""")
+            )
+            for (pattern in urlPatterns) {
+                val match = pattern.find(url)
+                if (match != null) {
+                    val num = match.groupValues.getOrNull(1) ?: match.value
+                    extractedChapter = "Chapter $num"
+                    break
+                }
+            }
+        }
+
+        if (extractedNovel.isEmpty()) {
+            extractedNovel = cleanTitle
+        }
         
-        return Pair(cleanTitle, "Web Novel")
+        if (extractedChapter.isEmpty()) {
+            extractedChapter = "Chapter 1"
+        }
+
+        if (extractedNovel.startsWith("《") && extractedNovel.endsWith("》")) {
+            extractedNovel = extractedNovel.substring(1, extractedNovel.length - 1).trim()
+        }
+        
+        if (extractedNovel.isEmpty()) {
+            extractedNovel = "Web Novel"
+        }
+
+        return Pair(extractedNovel, extractedChapter)
     }
 
     suspend fun insertBookmark(url: String, title: String, imageUrl: String? = null) {

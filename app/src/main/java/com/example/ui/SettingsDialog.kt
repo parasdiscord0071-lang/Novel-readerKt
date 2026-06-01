@@ -2,6 +2,8 @@ package com.example.ui
 
 import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,6 +38,59 @@ fun SettingsDialog(
     webViewsMap: Map<Long, android.webkit.WebView>
 ) {
     val context = LocalContext.current
+    val contentResolver = context.contentResolver
+
+    // SAF Create Document launcher for Exporting Backup JSON
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            try {
+                contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    viewModel.exportBackup(
+                        outputStream = outputStream,
+                        onSuccess = {
+                            Toast.makeText(context, "Backup downloaded successfully!", Toast.LENGTH_SHORT).show()
+                        },
+                        onError = { e ->
+                            Toast.makeText(context, "Backup failed: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                    )
+                } ?: run {
+                    Toast.makeText(context, "Could not open selected destination file", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error export: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // SAF Open Document launcher for Importing Backup JSON
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                contentResolver.openInputStream(uri)?.use { inputStream ->
+                    viewModel.importBackup(
+                        inputStream = inputStream,
+                        onSuccess = {
+                            Toast.makeText(context, "Backup restored successfully!", Toast.LENGTH_SHORT).show()
+                            onDismissRequest() // Auto-close settings dialog so values are refreshed
+                        },
+                        onError = { e ->
+                            Toast.makeText(context, "Restore failed: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                    )
+                } ?: run {
+                    Toast.makeText(context, "Could not open selected backup file", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error import: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     val sharedPrefs = remember(context) { context.getSharedPreferences("wtr_browser_settings", Context.MODE_PRIVATE) }
     
     var enableWebTrackplayer by remember { mutableStateOf(sharedPrefs.getBoolean("enable_web_trackplayer", false)) }
@@ -888,6 +943,99 @@ fun SettingsDialog(
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text("Clear Navigation History & Cache", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+
+                // SECTION 5: BACKUP & RESTORE DATA
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.testTag("backup_restore_section_card")
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Backup,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Backup & Restore Data",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Text(
+                            text = "Download a copy of history, bookmarks, tabs, and preferences, or restore the browser state from a previously saved JSON file.",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Button(
+                                onClick = {
+                                    try {
+                                        exportLauncher.launch("wtr_browser_backup.json")
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Error starting exporter: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1.5f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text("Download Backup", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    try {
+                                        importLauncher.launch(arrayOf("*/*"))
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Error starting importer: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1.5f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Upload,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text("Upload Backup", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                }
                             }
                         }
                     }

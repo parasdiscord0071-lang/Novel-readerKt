@@ -83,7 +83,11 @@ fun getProxyTranslatedUrl(url: String): String {
     try {
         val uri = android.net.Uri.parse(url)
         val host = uri.host ?: return url
-        val cleanHost = host.replace("www.", "").replace(".", "-") + ".translate.goog"
+        
+        // Google Translate proxy rule: original hyphens become double hyphens, dots become single hyphens
+        val hostWithoutWww = host.removePrefix("www.")
+        val cleanHost = hostWithoutWww.replace("-", "--").replace(".", "-") + ".translate.goog"
+        
         val path = uri.encodedPath ?: ""
         val query = uri.encodedQuery
         

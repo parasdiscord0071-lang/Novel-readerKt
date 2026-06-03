@@ -240,7 +240,8 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                     @Deprecated("Deprecated in Java")
                     override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
                         if (url == null) return false
-                        if (shouldTranslateUrl(url)) {
+                        val currentUrl = view?.url ?: ""
+                        if (!isSameBaseOrTranslatedUrl(currentUrl, url) && shouldTranslateUrl(url)) {
                             val translatedUrl = getProxyTranslatedUrl(url)
                             com.example.WtrLogManager.log(context, "shouldOverrideUrlLoading redirect tab=${tab.id} translation: $url -> $translatedUrl")
                             view?.loadUrl(translatedUrl)
@@ -251,11 +252,14 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
 
                     override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
                         val url = request?.url?.toString() ?: return false
-                        if (shouldTranslateUrl(url)) {
-                            val translatedUrl = getProxyTranslatedUrl(url)
-                            com.example.WtrLogManager.log(context, "shouldOverrideUrlLoading redirect tab=${tab.id} translation: $url -> $translatedUrl")
-                            view?.loadUrl(translatedUrl)
-                            return true
+                        if (request.isForMainFrame && !request.url.toString().startsWith("intent://")) {
+                            val currentUrl = view?.url ?: ""
+                            if (!isSameBaseOrTranslatedUrl(currentUrl, url) && shouldTranslateUrl(url)) {
+                                val translatedUrl = getProxyTranslatedUrl(url)
+                                com.example.WtrLogManager.log(context, "shouldOverrideUrlLoading redirect tab=${tab.id} translation: $url -> $translatedUrl")
+                                view?.loadUrl(translatedUrl)
+                                return true
+                            }
                         }
                         return false
                     }
@@ -270,13 +274,6 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                             webProgress = 10
                         }
                         view?.let { injectTtsBridgeScript(it) }
-
-                        if (url != null && view != null && shouldTranslateUrl(url)) {
-                            val translatedUrl = getProxyTranslatedUrl(url)
-                            com.example.WtrLogManager.log(context, "onPageStarted redirect tab=${tab.id} auto-translation: $url -> $translatedUrl")
-                            view.stopLoading()
-                            view.loadUrl(translatedUrl)
-                        }
                     }
 
                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -297,6 +294,17 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                         }
                         if (url != null && (url.contains("translate.goog") || url.contains("translate.google"))) {
                             injectTranslateCssCleanup(this@apply)
+                        }
+                    }
+
+                    override fun onReceivedError(
+                        view: WebView?,
+                        request: android.webkit.WebResourceRequest?,
+                        error: android.webkit.WebResourceError?
+                    ) {
+                        super.onReceivedError(view, request, error)
+                        if (request?.isForMainFrame == true) {
+                            com.example.WtrLogManager.log(context, "onReceivedError tab=${tab.id}: ${error?.description}")
                         }
                     }
 

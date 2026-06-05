@@ -6,6 +6,27 @@ By establishing a bidirectional JavaScript-to-Native synchronization bridge, Nov
 
 ---
 
+## 📖 Technical Documentation Index
+For deep architectural and implementation details, refer to the following guides:
+- [🚀 Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md): System-wide topology and state flow synchronization rules.
+- [📱 Core Engine Manual](docs/CORE_ENGINE.md): Detailed internals of background services, bridges, and logging.
+- [🎨 UI Subsystem Guide](docs/UI_LAYER.md): Compose layouts, injected styles, and scraper logic documentation.
+- [🗄️ Data Layer Schema](docs/DATA_LAYER.md): Room database entities, serialization, and backup/restore procedures.
+- [🧭 Agent Onboarding (AGENTS.md)](AGENTS.md): Critical rules, defect history, and operational memory for developers.
+
+---
+
+## 🚀 Supported Website Registry
+The reader engine has specialized scraper logic and optimized playback flows for:
+- **Wtr-Lab** (`wtr-lab.com`) - Native companion reader.
+- **WebNovel** (`webnovel.com`) - Infinite scroll support.
+- **NovelHall / FanMtl / NovelBin / FreeWebNovel** - Standard web scrapers.
+- **TimoTxt / Novel543 / Twkan** - Auto-translation optimized.
+- **NovelHub** (`novelhub.net`) - Enhanced English reader support.
+- **NovelHubApp** (`novelhubapp.com`) - Optimized SPA reader with history tracking.
+
+---
+
 ## 🎨 Visual Identity & System Architecture
 
 ```

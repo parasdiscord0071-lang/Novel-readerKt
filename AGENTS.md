@@ -90,3 +90,14 @@ Ensure you read this section before making any changes to WebView behaviors, lif
   -  `TabsPanel.kt`: *Double-grid UI folders to manage standalone tabs or nested tab folders.*
 - `/app/src/main/java/com/example/data/`
   -  *Room database configurations decoupling database tables (`BookmarkEntry`, `HistoryEntry`, `TabEntry`) with simple repository patterns and clean table-wipe queries.*
+
+---
+
+## 🌐 Supported Website Registry & Scraper Patterns
+The reader engine has specialized scraper logic for the following domains:
+- **Wtr-Lab** (`wtr-lab.com`): Primary target with deep JS bridge integration.
+- **WebNovel** (`webnovel.com`): Dynamic container extraction with ad-blocker detection bypass.
+- **NovelHall / FanMtl / NovelBin / FreeWebNovel**: standard CSS selector extraction.
+- **TimoTxt / Novel543 / Twkan**: High-priority auto-translation domains with specialized junk filtering.
+- **NovelHub** (`novelhub.net`): English-first domain with standard `#chr-content` or `.chapter-content` extraction.
+- **NovelHubApp** (`novelhubapp.com`): Single-page reader app with dynamic navigation. Tracking implemented via client-side hash injection to ensure chapter uniqueness in history.

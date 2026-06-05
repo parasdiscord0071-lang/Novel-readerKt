@@ -196,6 +196,30 @@ fun ChromeNewTabPage(
                     subtitle = "timotxt.com",
                     url = "https://www.timotxt.com/",
                     color = Color(0xFFE91E63) // Pink
+                ),
+                ShortcutItem(
+                    title = "Novel543",
+                    subtitle = "novel543.com",
+                    url = "https://www.novel543.com/",
+                    color = Color(0xFF4CAF50) // Green
+                ),
+                ShortcutItem(
+                    title = "Twkan",
+                    subtitle = "twkan.com",
+                    url = "https://twkan.com/",
+                    color = Color(0xFFFFEB3B) // Yellow
+                ),
+                ShortcutItem(
+                    title = "NovelHub",
+                    subtitle = "novelhub.net",
+                    url = "https://novelhub.net/",
+                    color = Color(0xFF2196F3) // Blue
+                ),
+                ShortcutItem(
+                    title = "NovelHubApp",
+                    subtitle = "novelhubapp.com",
+                    url = "https://novelhubapp.com/",
+                    color = Color(0xFF673AB7) // Deep Purple
                 )
             )
 

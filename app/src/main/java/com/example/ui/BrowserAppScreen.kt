@@ -117,7 +117,7 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
     var forceDarkContent by remember { mutableStateOf(sharedPrefs.getBoolean("force_dark_content", false)) } 
     var autoFocusParagraphs by remember { mutableStateOf(sharedPrefs.getBoolean("auto_focus_paragraphs", true)) } 
     var autoTranslateEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("auto_translate_enabled", true)) }
-    var autoTranslateDomains by remember { mutableStateOf(sharedPrefs.getString("auto_translate_domains", "timotxt.com, timotxt") ?: "timotxt.com, timotxt") }
+    var autoTranslateDomains by remember { mutableStateOf(sharedPrefs.getString("auto_translate_domains", "timotxt.com, timotxt, novel543.com, novel543, twkan.com, twkan, novelhubapp.com") ?: "timotxt.com, timotxt, novel543.com, novel543, twkan.com, twkan, novelhubapp.com") }
     var adBlockerEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("ad_blocker_enabled", true)) }
     var customTextZoom by remember { mutableStateOf(sharedPrefs.getInt("custom_text_zoom", 115)) }
     var previousTabId by remember { mutableStateOf<Long?>(null) }
@@ -210,9 +210,9 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                     textZoom = customTextZoom
                     
                     userAgentString = if (tab.isDesktopMode) {
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
                     } else {
-                        "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+                        "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
                     }
                     useWideViewPort = tab.isDesktopMode
                     loadWithOverviewMode = tab.isDesktopMode
@@ -349,8 +349,8 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                     onUrlSynced = { syncedUrl, htmlTitle ->
                         val currentActive = viewModel.currentTab.value
                         val isWebUrl = syncedUrl.startsWith("http://") || syncedUrl.startsWith("https://")
-                        if (isWebUrl && currentActive?.id == tab.id && currentActive.url != syncedUrl && currentActive.url != "chrome://newtab") {
-                            com.example.WtrLogManager.log(context, "onUrlSynced matching tab ID=${tab.id} synchronized to: $syncedUrl (current: ${currentActive.url})")
+                        if (isWebUrl && currentActive?.id == tab.id && (currentActive.url != syncedUrl || currentActive.title != htmlTitle) && currentActive.url != "chrome://newtab") {
+                            com.example.WtrLogManager.log(context, "onUrlSynced matching tab ID=${tab.id} synchronized to: $syncedUrl (title: $htmlTitle)")
                             coroutineScope.launch {
                                 viewModel.onPageLoaded(syncedUrl, htmlTitle)
                             }
@@ -404,9 +404,9 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
         val wv = currentActiveWebView
         if (tab != null && wv != null) {
             val targetUA = if (tab.isDesktopMode) {
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
             } else {
-                "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+                "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
             }
             if (wv.settings.userAgentString != targetUA) {
                 wv.settings.userAgentString = targetUA
@@ -631,7 +631,7 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                                                 if (t.length < 5) return true;
                                                 if (t.includes("ad-blocker") || t.includes("adblocker") || t.includes("ad block") || t.includes("adblock") || t.includes("please disable") || t.includes("stop your ad blocker") || t.includes("ad blocker detected")) return true;
                                                 if (t.includes(".com") || t.includes(".org") || t.includes(".net") || t.includes(".me") || t.includes(".xyz")  || t.includes("http://") || t.includes("https://")) {
-                                                    if (t.includes("novelbin") || t.includes("novelhall") || t.includes("freewebnovel") || t.includes("fanmtl") || t.includes("timotxt") || t.includes("webnovel")) {
+                                                    if (t.includes("novelbin") || t.includes("novelhall") || t.includes("freewebnovel") || t.includes("fanmtl") || t.includes("timotxt") || t.includes("novel543") || t.includes("twkan") || t.includes("novelhub") || t.includes("novelhubapp") || t.includes("webnovel")) {
                                                         return true;
                                                     }
                                                 }
@@ -640,7 +640,7 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                                                     "rate this", "please review", "please rate", "author's note", "author note",
                                                     "editor's note", "editor note",
                                                     "find any errors", "broken links", "report us", "if you find any", "novelbin",
-                                                    "novelhall", "freewebnovel", "fanmtl", "timotxt", "webnovel", "next chapter",
+                                                    "novelhall", "freewebnovel", "fanmtl", "timotxt", "novel543", "twkan", "novelhub", "novelhubapp", "webnovel", "next chapter",
                                                     "previous chapter", "table of contents", "read online free", "read online for free",
                                                     "unlocked chapters", "bonus chapters", "sign up", "sign in", "subscribe to",
                                                     "follow my page", "download our app", "read this novel", "other novel", "like this book",
@@ -693,14 +693,17 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                                             } else if (host.includes("wtr-lab")) {
                                                 let el = document.querySelector('.read-content') || document.querySelector('#content') || document.querySelector('.wtr-reader-content') || document.querySelector('.chapter-content') || document.body;
                                                 if (el) containers.push(el);
-                                            } else if (host.includes("timotxt")) {
-                                                let el = document.querySelector('.read-content') || document.querySelector('#content') || document.querySelector('.show_txt');
+                                            } else if (host.includes("timotxt") || host.includes("novel543")) {
+                                                let el = document.querySelector('.read-content') || document.querySelector('#content') || document.querySelector('.show_txt') || document.querySelector('.content');
+                                                if (el) containers.push(el);
+                                            } else if (host.includes("twkan")) {
+                                                let el = document.querySelector('#htmlContent') || document.querySelector('#content') || document.querySelector('.active') || document.querySelector('.read-content');
                                                 if (el) containers.push(el);
                                             }
 
                                             if (containers.length > 0) {
                                                 containers.forEach(contentEl => {
-                                                    if (host.includes("novelhall") || host.includes("timotxt")) {
+                                                    if (host.includes("novelhall") || host.includes("timotxt") || host.includes("novel543")) {
                                                         prepareBrParagraphs(contentEl);
                                                     }
                                                     let pSelector = host.includes("webnovel") ? 'p, .cha-paragraph, .pirate' : 'p, .wtr-line-segment';
@@ -1111,7 +1114,7 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                                 let t = text.toLowerCase().trim();
                                 if (t.length < 5) return true;
                                 if (t.includes(".com") || t.includes(".org") || t.includes(".net") || t.includes(".me") || t.includes(".xyz") || t.includes("http://") || t.includes("https://")) {
-                                    if (t.includes("novelbin") || t.includes("novelhall") || t.includes("freewebnovel") || t.includes("fanmtl") || t.includes("timotxt") || t.includes("webnovel") || t.includes("wtr-lab")) {
+                                    if (t.includes("novelbin") || t.includes("novelhall") || t.includes("freewebnovel") || t.includes("fanmtl") || t.includes("timotxt") || t.includes("novel543") || t.includes("twkan") || t.includes("novelhub") || t.includes("novelhubapp") || t.includes("webnovel") || t.includes("wtr-lab")) {
                                         return true;
                                     }
                                 }
@@ -1120,7 +1123,7 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                                     "rate this", "please review", "please rate", "author's note", "author note",
                                     "recommend", "translator", "translation", "editor's note", "editor note",
                                     "find any errors", "broken links", "report us", "if you find any", "novelbin",
-                                    "novelhall", "freewebnovel", "fanmtl", "timotxt", "webnovel", "next chapter",
+                                    "novelhall", "freewebnovel", "fanmtl", "timotxt", "novel543", "twkan", "novelhub", "novelhubapp", "webnovel", "next chapter",
                                     "previous chapter", "table of contents", "read online free", "read online for free",
                                     "unlocked chapters", "bonus chapters", "sign up", "sign in", "subscribe to",
                                     "follow my page", "download our app", "read this novel", "other novel", "like this book"
@@ -1176,11 +1179,27 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                                         if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
                                     });
                                 }
-                            } else if (host.includes("timotxt") || host.includes("wtr-lab")) {
+                            } else if (host.includes("timotxt") || host.includes("novel543") || host.includes("wtr-lab")) {
                                 contentEl = document.querySelector('.read-content') || document.querySelector('#content') || document.querySelector('.show_txt') || document.querySelector('.wtr-reader-content');
                                 if (contentEl) {
                                     let pTags = contentEl.querySelectorAll('p, .wtr-line-segment');
                                     pTags.forEach(p => {
+                                        let text = p.innerText.trim();
+                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
+                                    });
+                                }
+                            } else if (host.includes("twkan")) {
+                                contentEl = document.querySelector('#htmlContent') || document.querySelector('#content') || document.querySelector('.active') || document.querySelector('.read-content');
+                                if (contentEl) {
+                                    contentEl.querySelectorAll('p').forEach(p => {
+                                        let text = p.innerText.trim();
+                                        if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
+                                    });
+                                }
+                            } else if (host.includes("novelhub")) {
+                                contentEl = document.querySelector('#chr-content') || document.querySelector('.chapter-content') || document.querySelector('.read-content') || document.querySelector('.entry-content') || document.querySelector('.reader-content');
+                                if (contentEl) {
+                                    contentEl.querySelectorAll('p').forEach(p => {
                                         let text = p.innerText.trim();
                                         if (text.length > 5 && !isJunk(text)) paragraphs.push(text);
                                     });
@@ -1269,7 +1288,7 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                         let t = text.toLowerCase().trim();
                         if (t.length < 5) return true;
                         if (t.includes(".com") || t.includes(".org") || t.includes(".net") || t.includes(".me") || t.includes(".xyz") || t.includes("http://") || t.includes("https://")) {
-                            if (t.includes("novelbin") || t.includes("novelhall") || t.includes("freewebnovel") || t.includes("fanmtl") || t.includes("timotxt") || t.includes("webnovel")) {
+                            if (t.includes("novelbin") || t.includes("novelhall") || t.includes("freewebnovel") || t.includes("fanmtl") || t.includes("timotxt") || t.includes("novel543") || t.includes("twkan") || t.includes("novelhub") || t.includes("novelhubapp") || t.includes("webnovel")) {
                                 return true;
                             }
                         }
@@ -1278,7 +1297,7 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                             "rate this", "please review", "please rate", "author's note", "author note",
                             "recommend", "translator", "translation", "editor's note", "editor note",
                             "find any errors", "broken links", "report us", "if you find any", "novelbin",
-                            "novelhall", "freewebnovel", "fanmtl", "timotxt", "webnovel", "next chapter",
+                            "novelhall", "freewebnovel", "fanmtl", "timotxt", "novel543", "twkan", "novelhub", "novelhubapp", "webnovel", "next chapter",
                             "previous chapter", "table of contents", "read online free", "read online for free",
                             "unlocked chapters", "bonus chapters", "sign up", "sign in", "subscribe to",
                             "follow my page", "download our app", "read this novel", "other novel", "like this book"
@@ -1371,11 +1390,33 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                                 }
                             });
                         }
-                    } else if (host.includes("timotxt")) {
+                    } else if (host.includes("timotxt") || host.includes("novel543")) {
                         let contentEl = document.querySelector('.read-content') || document.querySelector('#content') || document.querySelector('.show_txt');
                         if (contentEl) {
                             prepareBrParagraphs(contentEl);
                             let pTags = contentEl.querySelectorAll('p, .wtr-line-segment');
+                            pTags.forEach(p => {
+                                if (!p.closest('.nav, .ads, .menu, .chapter-nav')) {
+                                    let text = p.innerText.trim();
+                                    if (text.length > 5 && !isJunk(text)) elements.push(p);
+                                }
+                            });
+                        }
+                    } else if (host.includes("twkan")) {
+                        let contentEl = document.querySelector('#htmlContent') || document.querySelector('#content') || document.querySelector('.active') || document.querySelector('.read-content');
+                        if (contentEl) {
+                            let pTags = contentEl.querySelectorAll('p');
+                            pTags.forEach(p => {
+                                if (!p.closest('.nav, .ads, .menu, .chapter-nav')) {
+                                    let text = p.innerText.trim();
+                                    if (text.length > 5 && !isJunk(text)) elements.push(p);
+                                }
+                            });
+                        }
+                    } else if (host.includes("novelhub")) {
+                        let contentEl = document.querySelector('#chr-content') || document.querySelector('.chapter-content') || document.querySelector('.read-content') || document.querySelector('.entry-content') || document.querySelector('.reader-content');
+                        if (contentEl) {
+                            let pTags = contentEl.querySelectorAll('p');
                             pTags.forEach(p => {
                                 if (!p.closest('.nav, .ads, .menu, .chapter-nav')) {
                                     let text = p.innerText.trim();
@@ -1829,7 +1870,11 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                         "https://www.fanmtl.com/" to "Fanmtl",
                         "https://novelbin.me/" to "NovelBin",
                         "https://freewebnovel.com/index" to "Freewebnovel",
-                        "https://www.timotxt.com/" to "TimoTxt"
+                        "https://www.timotxt.com/" to "TimoTxt",
+                        "https://www.novel543.com/" to "Novel543",
+                        "https://twkan.com/" to "Twkan",
+                        "https://novelhub.net/" to "NovelHub",
+                        "https://novelhubapp.com/" to "NovelHubApp (Reader App)"
                     )
                     
                     val suggestionsToDisplay = if (currentQuery.isNotEmpty() && currentQuery != "chrome://newtab") {
@@ -2290,7 +2335,7 @@ fun BrowserAppScreen(webView: WebView, onThemeChanged: (String) -> Unit = {}) {
                         forceDarkContent = sharedPrefs.getBoolean("force_dark_content", false)
                         autoFocusParagraphs = sharedPrefs.getBoolean("auto_focus_paragraphs", true)
                         autoTranslateEnabled = sharedPrefs.getBoolean("auto_translate_enabled", true)
-                        autoTranslateDomains = sharedPrefs.getString("auto_translate_domains", "timotxt.com, timotxt") ?: "timotxt.com, timotxt"
+                        autoTranslateDomains = sharedPrefs.getString("auto_translate_domains", "timotxt.com, timotxt, novel543.com, novel543, twkan.com, twkan, novelhubapp.com") ?: "timotxt.com, timotxt, novel543.com, novel543, twkan.com, twkan, novelhubapp.com"
                         adBlockerEnabled = sharedPrefs.getBoolean("ad_blocker_enabled", true)
                         customTextZoom = sharedPrefs.getInt("custom_text_zoom", 115)
                         currentThemeName = sharedPrefs.getString("app_theme", "Dark") ?: "Dark"
@@ -2589,13 +2634,25 @@ private fun extractNovelAndChapter(title: String, url: String): Pair<String, Str
         .replace(" - FreeWebNovel", "", ignoreCase = true)
         .replace(" - FanMTL", "", ignoreCase = true)
         .replace(" - timotxt", "", ignoreCase = true)
+        .replace(" - novel543", "", ignoreCase = true)
+        .replace(" - twkan", "", ignoreCase = true)
+        .replace(" - NovelHub", "", ignoreCase = true)
+        .replace(" - NovelHubApp", "", ignoreCase = true)
         .replace(" online free", "", ignoreCase = true)
         .replace(" read online", "", ignoreCase = true)
         .replace("_timotxt", "", ignoreCase = true)
         .replace("_timotxt.com", "", ignoreCase = true)
         .replace("_novelhall.com", "", ignoreCase = true)
+        .replace("_novel543.com", "", ignoreCase = true)
+        .replace("_twkan.com", "", ignoreCase = true)
+        .replace("_novelhub.net", "", ignoreCase = true)
+        .replace("_novelhubapp.com", "", ignoreCase = true)
         .replace(" - timotxt.com", "", ignoreCase = true)
         .replace(" - novelhall.com", "", ignoreCase = true)
+        .replace(" - novel543.com", "", ignoreCase = true)
+        .replace(" - twkan.com", "", ignoreCase = true)
+        .replace(" - novelhub.net", "", ignoreCase = true)
+        .replace(" - novelhubapp.com", "", ignoreCase = true)
         .trim()
         
     if (cleanTitle.startsWith("《") && cleanTitle.endsWith("》")) {
@@ -2668,6 +2725,7 @@ private fun extractNovelAndChapter(title: String, url: String): Pair<String, Str
         val urlPatterns = listOf(
             Regex("""(?i)chapter[-_]?(\d+)"""),
             Regex("""(?i)ch[-_]?(\d+)"""),
+            Regex("""wtr=([a-zA-Z0-9_]+)"""),
             Regex("""/(\d+)\.html"""),
             Regex("""/(\d+)""")
         )

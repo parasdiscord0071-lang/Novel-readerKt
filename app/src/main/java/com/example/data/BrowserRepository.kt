@@ -33,13 +33,25 @@ class BrowserRepository(private val browserDao: BrowserDao) {
             .replace(" - FreeWebNovel", "", ignoreCase = true)
             .replace(" - FanMTL", "", ignoreCase = true)
             .replace(" - timotxt", "", ignoreCase = true)
+            .replace(" - novel543", "", ignoreCase = true)
+            .replace(" - twkan", "", ignoreCase = true)
+            .replace(" - NovelHub", "", ignoreCase = true)
+            .replace(" - NovelHubApp", "", ignoreCase = true)
             .replace(" online free", "", ignoreCase = true)
             .replace(" read online", "", ignoreCase = true)
             .replace("_timotxt", "", ignoreCase = true)
             .replace("_timotxt.com", "", ignoreCase = true)
             .replace("_novelhall.com", "", ignoreCase = true)
+            .replace("_novel543.com", "", ignoreCase = true)
+            .replace("_twkan.com", "", ignoreCase = true)
+            .replace("_novelhub.net", "", ignoreCase = true)
+            .replace("_novelhubapp.com", "", ignoreCase = true)
             .replace(" - timotxt.com", "", ignoreCase = true)
             .replace(" - novelhall.com", "", ignoreCase = true)
+            .replace(" - novel543.com", "", ignoreCase = true)
+            .replace(" - twkan.com", "", ignoreCase = true)
+            .replace(" - novelhub.net", "", ignoreCase = true)
+            .replace(" - novelhubapp.com", "", ignoreCase = true)
             .trim()
             
         if (cleanTitle.startsWith("《") && cleanTitle.endsWith("》")) {
@@ -112,6 +124,7 @@ class BrowserRepository(private val browserDao: BrowserDao) {
             val urlPatterns = listOf(
                 Regex("""(?i)chapter[-_]?(\d+)"""),
                 Regex("""(?i)ch[-_]?(\d+)"""),
+                Regex("""wtr=([a-zA-Z0-9_]+)"""),
                 Regex("""/(\d+)\.html"""),
                 Regex("""/(\d+)""")
             )
@@ -146,7 +159,7 @@ class BrowserRepository(private val browserDao: BrowserDao) {
 
     suspend fun insertBookmark(url: String, title: String, imageUrl: String? = null) {
         val host = try { Uri.parse(url).host ?: "" } catch (e: Exception) { "" }.lowercase()
-        val hasNovelHost = host.contains("novel") || host.contains("timotxt") || host.contains("fanmtl") || host.contains("translate.goog")
+        val hasNovelHost = host.contains("novel") || host.contains("timotxt") || host.contains("fanmtl") || host.contains("twkan") || host.contains("novelhub") || host.contains("novelhubapp") || host.contains("translate.goog")
         val parsed = extractNovelAndChapter(title, url)
         val hasChapterInTitle = title.contains("Chapter", ignoreCase = true) || title.contains("Ch.", ignoreCase = true) || title.contains("Ch ", ignoreCase = true)
         val isNovel = hasNovelHost || hasChapterInTitle || (parsed.second != "Web Novel" && parsed.second != "Web Chapter")

@@ -402,9 +402,40 @@ fun injectTtsBridgeScript(webView: WebView) {
 
                 let progVal = findParagraphProgress();
                 let subtitleVal = isPlaying ? (progVal ? "Paragraph " + progVal : "Reading novel text...") : "Paused";
+                let syncedUrl = window.location.href;
+                try {
+                    // Unique tracking for SPA-style reader sites that don't change URL on chapter swap (NovelHubApp)
+                    if (syncedUrl.includes("novelhubapp.com/reader") || syncedUrl.includes("novelhubapp.com/novel") || syncedUrl.includes("novelhub.net/novel")) {
+                        let chapterIndicator = "";
+                        // Try to find chapter ID or number in standard containers
+                        let chEl = document.querySelector('.chapter-title, .title, .current-chapter, h1, h2');
+                        if (chEl) {
+                            chapterIndicator = chEl.innerText.trim();
+                        } else {
+                            chapterIndicator = document.title;
+                        }
+                        
+                        if (chapterIndicator) {
+                            // Extract numbers or specific strings to make hash unique
+                            let cleanIndicator = chapterIndicator.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                            if (cleanIndicator.length > 0) {
+                                if (!syncedUrl.includes("#")) {
+                                    syncedUrl += "#wtr=" + cleanIndicator;
+                                } else if (!syncedUrl.includes("wtr=")) {
+                                    syncedUrl += "&wtr=" + cleanIndicator;
+                                } else {
+                                    // Update existing wtr hash
+                                    let base = syncedUrl.split("wtr=")[0];
+                                    syncedUrl = base + "wtr=" + cleanIndicator;
+                                }
+                            }
+                        }
+                    }
+                } catch(e) {}
+
                 window.WtrBridge.syncPollState(isPlaying, textVal, subtitleVal);
                 if (window.WtrBridge && window.WtrBridge.syncUrl) {
-                    window.WtrBridge.syncUrl(window.location.href, document.title || "Wtr-Lab Novel");
+                    window.WtrBridge.syncUrl(syncedUrl, document.title || "Wtr-Lab Novel");
                 }
             }, 1000);
         })();

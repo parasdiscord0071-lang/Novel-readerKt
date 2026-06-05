@@ -132,3 +132,14 @@ Houses logging buffers to track actions.
   ```
 - Checked against `enable_logs` inside Android Shared Preferences to enforce privacy-focused opt-in behaviors.
 - Critical system operations (e.g. paragraph extraction, page loads, volume adjustments) must write debug events through `WtrLogManager.log` for in-app debugging views.
++
++---
++
++## 🌐 Supported Domains & Scraper Registry
++The core engine contains specialized patterns for:
++- **Wtr-Lab** (`wtr-lab.com`)
++- **WebNovel** (`webnovel.com`)
++- **NovelHall / FanMtl / NovelBin / FreeWebNovel**
++- **TimoTxt / Novel543 / Twkan**
++- **NovelHub** (`novelhub.net`)
+- **NovelHubApp** (`novelhubapp.com`)

@@ -194,8 +194,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun onPageLoaded(url: String, title: String) {
         viewModelScope.launch {
             val current = _currentTab.value
-            if (current != null && current.url != url) {
-                com.example.WtrLogManager.log(getApplication(), "onPageLoaded updates tab ID=${current.id} from ${current.url} to $url")
+            if (current != null && (current.url != url || current.title != title)) {
+                com.example.WtrLogManager.log(getApplication(), "onPageLoaded updates tab ID=${current.id} from ${current.url} to $url (title=$title)")
                 val updated = current.copy(url = url, title = title)
                 repository.updateTab(updated)
                 _currentTab.value = updated
@@ -222,6 +222,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         if (lower == "wtr") return "https://wtr-lab.com/en"
         if (lower == "nov" || lower == "no" || lower == "novel") return "https://www.novelhall.com/"
         if (lower == "timo" || lower == "timotxt") return "https://www.timotxt.com/"
+        if (lower == "n543" || lower == "novel543") return "https://www.novel543.com/"
+        if (lower == "twkan" || lower == "tw") return "https://twkan.com/"
+        if (lower == "nhub" || lower == "novelhub") return "https://novelhub.net/"
+        if (lower == "nhubapp" || lower == "novelhubapp") return "https://novelhubapp.com/"
 
         if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
             return trimmed
@@ -289,7 +293,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     put("auto_focus_paragraphs", sharedPrefs.getBoolean("auto_focus_paragraphs", true))
                     put("remember_paragraphs", sharedPrefs.getBoolean("remember_paragraphs", true))
                     put("auto_translate_enabled", sharedPrefs.getBoolean("auto_translate_enabled", true))
-                    put("auto_translate_domains", sharedPrefs.getString("auto_translate_domains", "timotxt.com, timotxt"))
+                    put("auto_translate_domains", sharedPrefs.getString("auto_translate_domains", "timotxt.com, timotxt, novel543.com, novel543, twkan.com, twkan"))
                     put("ad_blocker_enabled", sharedPrefs.getBoolean("ad_blocker_enabled", true))
                 }
                 json.put("settings", settingsJson)

@@ -61,8 +61,13 @@ One of the application's most critical subsystems is its **custom paragraph DOM 
     function isJunk(text) {
         let t = text.toLowerCase().trim();
         if (t.length < 5) return true;
+        if (t.includes(".com") || t.includes(".org") || t.includes(".net") || t.includes(".me") || t.includes(".xyz") || t.includes("http://") || t.includes("https://")) {
+            if (t.includes("novelbin") || t.includes("novelhall") || t.includes("freewebnovel") || t.includes("fanmtl") || t.includes("timotxt") || t.includes("novel543") || t.includes("twkan") || t.includes("novelhub") || t.includes("novelhubapp") || t.includes("webnovel")) {
+                return true;
+            }
+        }
         const promoKeywords = [
-            "join our discord", "patreon", "support me", "recommend", "rate this"
+            "join our discord", "patreon", "support me", "recommend", "rate this", "novelbin", "novelhall", "freewebnovel", "fanmtl", "timotxt", "novel543", "twkan", "novelhub", "novelhubapp"
         ];
         return promoKeywords.some(keyword => t.includes(keyword));
     }

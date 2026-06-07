@@ -34,6 +34,9 @@ class WtrBrowserService : Service() {
     // Throttling fields to prevent system notification rate-limiting error: "Package enqueue rate is ... Shedding"
     private var lastNotificationUpdateTime = 0L
     private var lastIsPlaying: Boolean? = null
+    private var lastRenderedIsPlaying: Boolean? = null
+    private var lastRenderedTitle: String? = null
+    private var lastRenderedSubtitle: String? = null
     private val notificationHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var pendingNotificationRunnable: Runnable? = null
 
@@ -608,8 +611,20 @@ class WtrBrowserService : Service() {
         val playStateChanged = lastIsPlaying != isPlaying
         lastIsPlaying = isPlaying
 
-        // Force immediate notification update on play/pause toggle, when stopped, or if 500ms has elapsed.
-        if (playStateChanged || (currentTime - lastNotificationUpdateTime >= 500L) || !isPlaying) {
+        // Skip completely redundant notification updates (where display title, subtitle, and play state are identical)
+        // to save CPU, battery, and avoid Android OS Package Enqueue Rate limit shedding.
+        val hasChanges = isPlaying != lastRenderedIsPlaying ||
+                         displayTitle != lastRenderedTitle ||
+                         displaySubtitle != lastRenderedSubtitle
+
+        if (!hasChanges) {
+            return
+        }
+
+        // Force immediate notification update on play/pause toggle.
+        // For standard scroll updates or progress, update if at least 1500ms since last update.
+        val throttleInterval = 1500L
+        if (playStateChanged || (currentTime - lastNotificationUpdateTime >= throttleInterval)) {
             pendingNotificationRunnable?.let { notificationHandler.removeCallbacks(it) }
             pendingNotificationRunnable = null
             
@@ -623,11 +638,16 @@ class WtrBrowserService : Service() {
                 lastNotificationUpdateTime = System.currentTimeMillis()
             }
             pendingNotificationRunnable = runnable
-            notificationHandler.postDelayed(runnable, 500L - (currentTime - lastNotificationUpdateTime))
+            notificationHandler.postDelayed(runnable, throttleInterval - (currentTime - lastNotificationUpdateTime))
         }
     }
 
     private fun performActualNotificationUpdate(isPlaying: Boolean, displayTitle: String, displaySubtitle: String) {
+        // Record rendered state to prevent duplicate notifications
+        lastRenderedIsPlaying = isPlaying
+        lastRenderedTitle = displayTitle
+        lastRenderedSubtitle = displaySubtitle
+
         // Intents
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP

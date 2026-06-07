@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.runtime.mutableStateListOf
+import kotlinx.coroutines.launch
 
 object WtrLogManager {
     private var loggingEnabled = true
@@ -12,6 +13,12 @@ object WtrLogManager {
     
     private val mainHandler = Handler(Looper.getMainLooper())
     private val lock = Any()
+
+    private val loggerScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+    
+    private val dateFormat = ThreadLocal.withInitial {
+        java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault())
+    }
 
     fun initialize(context: Context) {
         synchronized(lock) {
@@ -51,7 +58,8 @@ object WtrLogManager {
     fun log(context: Context?, msg: String) {
         synchronized(lock) {
             if (!loggingEnabled) return
-            val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()).format(java.util.Date())
+            val formatter = dateFormat.get()
+            val timestamp = if (formatter != null) formatter.format(java.util.Date()) else ""
             val formatted = "[$timestamp] $msg"
             
             mainHandler.post {
@@ -60,14 +68,14 @@ object WtrLogManager {
                     _logs.removeAt(_logs.size - 1)
                 }
                 
-                // Persist logs in the background thread instead of UI handler block
+                // Persist logs in the background thread instead of UI handler block using CoroutineScope
                 context?.let { ctx ->
                     val logsCopy = _logs.toList()
-                    Thread {
+                    loggerScope.launch {
                         val serialized = logsCopy.joinToString("||LC||")
                         val sharedPrefs = ctx.getSharedPreferences("wtr_browser_settings", Context.MODE_PRIVATE)
                         sharedPrefs.edit().putString("saved_logs_serialized", serialized).apply()
-                    }.start()
+                    }
                 }
             }
         }

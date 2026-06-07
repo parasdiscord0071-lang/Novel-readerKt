@@ -785,11 +785,26 @@ class WtrBrowserService : Service() {
         WtrAudioControlBridge.onResumeNative = null
         WtrAudioControlBridge.playCustomParagraphAction = null
 
-        tts?.let {
-            it.stop()
-            it.shutdown()
+        synchronized(this) {
+            try {
+                tts?.setOnUtteranceProgressListener(null)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            tts?.let {
+                try {
+                    it.stop()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                try {
+                    it.shutdown()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            tts = null
         }
-        tts = null
 
         releaseWakeLock()
         releaseWifiLock()

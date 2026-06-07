@@ -392,9 +392,11 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     throw Exception("Could not open source file stream")
                 }
 
-                val jsonString = inputStream.use { stream ->
-                    val reader = java.io.BufferedReader(java.io.InputStreamReader(stream, "UTF-8"))
-                    reader.use { it.readText() }
+                val jsonString = kotlinx.coroutines.withTimeout(10000L) {
+                    inputStream.use { stream ->
+                        val reader = java.io.BufferedReader(java.io.InputStreamReader(stream, "UTF-8"))
+                        reader.use { it.readText() }
+                    }
                 }
                 val json = org.json.JSONObject(jsonString)
 

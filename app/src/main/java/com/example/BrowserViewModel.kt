@@ -471,7 +471,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 }
 
                 // Use our streaming parser! This completely reads the stream without loading it whole.
-                val backupData = StreamingJsonParser.parseBackupStream(processingStream)
+                val backupData = kotlinx.coroutines.withTimeout(30000L) {
+                    StreamingJsonParser.parseBackupStream(processingStream)
+                }
 
                 // 1. Restore SharedPreferences
                 val sharedPrefs = context.getSharedPreferences("wtr_browser_settings", Context.MODE_PRIVATE)

@@ -28,65 +28,72 @@ object StreamingJsonParser {
         val tabs = mutableListOf<TabEntry>()
 
         val reader = JsonReader(InputStreamReader(inputStream, "UTF-8"))
-        reader.beginObject()
-        while (reader.hasNext()) {
-            val sectionName = reader.nextName()
-            when (sectionName) {
-                "version" -> {
-                    version = reader.nextInt()
-                }
-                "timestamp" -> {
-                    timestamp = reader.nextLong()
-                }
-                "settings" -> {
-                    reader.beginObject()
-                    while (reader.hasNext()) {
-                        val key = reader.nextName()
-                        val token = reader.peek()
-                        val value: Any = when (token) {
-                            JsonToken.BOOLEAN -> reader.nextBoolean()
-                            JsonToken.NUMBER -> {
-                                val doubleVal = reader.nextDouble()
-                                if (doubleVal == doubleVal.toInt().toDouble()) doubleVal.toInt() else doubleVal
+        try {
+            reader.beginObject()
+            while (reader.hasNext()) {
+                val sectionName = reader.nextName()
+                when (sectionName) {
+                    "version" -> {
+                        version = reader.nextInt()
+                    }
+                    "timestamp" -> {
+                        timestamp = reader.nextLong()
+                    }
+                    "settings" -> {
+                        reader.beginObject()
+                        while (reader.hasNext()) {
+                            val key = reader.nextName()
+                            val token = reader.peek()
+                            val value: Any = when (token) {
+                                JsonToken.BOOLEAN -> reader.nextBoolean()
+                                JsonToken.NUMBER -> {
+                                    val doubleVal = reader.nextDouble()
+                                    if (doubleVal == doubleVal.toInt().toDouble()) doubleVal.toInt() else doubleVal
+                                }
+                                JsonToken.STRING -> reader.nextString()
+                                else -> {
+                                    reader.skipValue()
+                                    ""
+                                }
                             }
-                            JsonToken.STRING -> reader.nextString()
-                            else -> {
-                                reader.skipValue()
-                                ""
-                            }
+                            settings[key] = value
                         }
-                        settings[key] = value
+                        reader.endObject()
                     }
-                    reader.endObject()
-                }
-                "history" -> {
-                    reader.beginArray()
-                    while (reader.hasNext()) {
-                        history.add(parseHistoryEntry(reader))
+                    "history" -> {
+                        reader.beginArray()
+                        while (reader.hasNext()) {
+                            history.add(parseHistoryEntry(reader))
+                        }
+                        reader.endArray()
                     }
-                    reader.endArray()
-                }
-                "bookmarks" -> {
-                    reader.beginArray()
-                    while (reader.hasNext()) {
-                        bookmarks.add(parseBookmarkEntry(reader))
+                    "bookmarks" -> {
+                        reader.beginArray()
+                        while (reader.hasNext()) {
+                            bookmarks.add(parseBookmarkEntry(reader))
+                        }
+                        reader.endArray()
                     }
-                    reader.endArray()
-                }
-                "tabs" -> {
-                    reader.beginArray()
-                    while (reader.hasNext()) {
-                        tabs.add(parseTabEntry(reader))
+                    "tabs" -> {
+                        reader.beginArray()
+                        while (reader.hasNext()) {
+                            tabs.add(parseTabEntry(reader))
+                        }
+                        reader.endArray()
                     }
-                    reader.endArray()
-                }
-                else -> {
-                    reader.skipValue()
+                    else -> {
+                        reader.skipValue()
+                    }
                 }
             }
+            reader.endObject()
+        } catch (e: Exception) {
+            throw Exception("Failed to parse backup JSON: ${e.message}", e)
+        } finally {
+            try {
+                reader.close()
+            } catch (ignored: Exception) {}
         }
-        reader.endObject()
-        reader.close()
 
         return BackupData(version, timestamp, settings, history, bookmarks, tabs)
     }

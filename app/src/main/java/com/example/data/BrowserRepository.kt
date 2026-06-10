@@ -208,7 +208,7 @@ class BrowserRepository(private val browserDao: BrowserDao) {
     suspend fun deleteTab(id: Long) = browserDao.deleteTab(id)
     suspend fun clearTabs() = browserDao.clearTabs()
 
-    suspend fun validateDatabaseIntegrity(): Boolean {
+    suspend fun validateDatabaseIntegrity(context: android.content.Context? = null): Boolean {
         return try {
             val history = browserDao.getAllHistoryList()
             val bookmarks = browserDao.getAllBookmarksList()
@@ -221,7 +221,7 @@ class BrowserRepository(private val browserDao: BrowserDao) {
             
             historyValid && bookmarksValid && tabsValid
         } catch (e: Exception) {
-            WtrLogManager.log(null, "Database integrity check failed: ${e.message}")
+            WtrLogManager.log(context, "Database integrity check failed: ${e.message}")
             false
         }
     }
